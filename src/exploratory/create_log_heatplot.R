@@ -11,36 +11,29 @@ library(gridExtra)
 # DATA WRANGLING
 ### -----
 
-data <- read.csv("/Users/sophiekk/PycharmProjects/bileacids/processed/master_data.csv")
-data$TAU <- as.numeric(data$TAU)
-data$ABETA <- as.numeric(data$ABETA)
+# data <- read.csv("/Users/sophiekk/PycharmProjects/bileacids/processed/master_data.csv")
+# data$TAU <- as.numeric(data$TAU)
+# data$ABETA <- as.numeric(data$ABETA)
+
+# data <- read.csv("/Users/sophiekk/PycharmProjects/bileacids/processed/master_data_minmax.csv")
+data <- read.csv("/Users/sophiekk/PycharmProjects/bileacids/processed/master_data_log10.csv")
+# data <- read.csv("/Users/sophiekk/PycharmProjects/bileacids/processed/master_data_standardscaler.csv")
 
 # set constants
-lab_values <- c("ABeta42", "pTau", "TAU", "FDG", "ABETA", "WholeBrain")
+lab_values <- c("ABeta42", "pTau", "TAU", "FDG", "ABETA", "WholeBrain", "AV45")
 covariates <- c("BMI", "PTGENDER", "APOE_e2e4", "AGE", "fast")
 begin_BA_cols <- which(colnames(data) == "CA")
 end_BA_cols <- which(colnames(data)=="BUDCA")
 begin_BA_ratio <- which(colnames(data) == "CA_CDCA")
 end_BA_ratio <- which(colnames(data) == "GLCA_CDCA")
 
-# min-max scaling
-# minmax_scale <- function(x) {
-#   (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
-# }
-# data[, begin_BA_cols:end_BA_cols] <- apply(data[, begin_BA_cols:end_BA_cols], 2, minmax_scale)
-# data[, begin_BA_ratio:end_BA_ratio] <-  apply(data[, begin_BA_ratio:end_BA_ratio], 2, minmax_scale)
-
-# log 10 scaling
-# data[, begin_BA_cols:end_BA_cols] <- log10(data[, begin_BA_cols:end_BA_cols] + 1e-10)
-# data[, begin_BA_ratio:end_BA_ratio] <- log10(data[, begin_BA_ratio:end_BA_ratio] + 1e-10)
-
 ### -------
 # Do BA move with known markers of AD pathology?
 ### -------
 
-# bl <- data[data$EXAMDATE_RANK==0,]
+bl <- data[data$EXAMDATE_RANK==0,]
+blHCAD <- bl
 # blHCAD <- bl[bl$DX_VALS %in% c(1,4),]
-blHCAD <- data
 
 bile_acids <- colnames(blHCAD)[c(begin_BA_cols:end_BA_cols, begin_BA_ratio:end_BA_ratio)]
 
@@ -95,8 +88,7 @@ all$class <- factor(all$class, levels = c("primary", "secondary",
                                               "primary_conjugated", "secondary_conjugated",
                                               "ratio"),
                     labels=c("Primary", "Secondary","Primary Conj", "Secondary Conj", "Ratio"))
-all$LabValue <- factor(all$LabValue, levels=c("ABeta42", "pTau","TAU","FDG","WholeBrain","ABETA"),
-                       labels=c("CSF AB", "CSF pTau", "CSF Tau","FDG", "MRI", "PET AB"))
+all$LabValue <- factor(all$LabValue, levels=c("ABeta42", "ABETA", "pTau","TAU","FDG","WholeBrain", "AV45"))
 ggplot(all, aes(x = LabValue, y = BileAcid, fill = qValue)) +
   geom_tile(color="gray") +
   theme_bw() +
