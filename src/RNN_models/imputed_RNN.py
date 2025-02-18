@@ -20,9 +20,12 @@ from torch.utils.data import DataLoader, TensorDataset
 # DATA PROCESSING
 ###
 
+# X = torch.load('processed/RNN/X.pt')
+# only BA and BA ratios
 X = torch.load('processed/RNN/X.pt')
 y = torch.load('processed/RNN/y.pt')
 is_missing = torch.load('processed/RNN/is_missing.pt')
+time_missing = torch.load('processed/RNN/time_missing.pt')
 
 # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 X_train, X_test, y_train, y_test, mask_train, mask_test = train_test_split(
@@ -104,7 +107,7 @@ plt.show()
 ###
 
 if eval:
-    # model.eval()
+    model.eval()
 
     y_true = []
     y_pred = []

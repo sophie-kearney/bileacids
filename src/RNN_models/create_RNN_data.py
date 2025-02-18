@@ -5,7 +5,7 @@
 import numpy as np
 import pandas as pd
 import torch
-
+import sys
 ###
 # DEFINE CONSTANTS
 ###
@@ -151,13 +151,14 @@ y = torch.tensor(y, dtype=torch.float32)
 is_missing = torch.tensor(is_missing, dtype=torch.float32)
 time_missing = torch.tensor(time_missing, dtype=torch.float32)
 
-
-
 # no NAs, no Infs
-# print(torch.isnan(X).any(), torch.isinf(X).any())
-# print(torch.isnan(y).any(), torch.isinf(y).any())
-# print(torch.isnan(is_missing).any(), torch.isinf(is_missing).any())
+X = torch.tensor(np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0), dtype=torch.float32)
+print(torch.isnan(X).any(), torch.isinf(X).any())
+print(torch.isnan(y).any(), torch.isinf(y).any())
+print(torch.isnan(is_missing).any(), torch.isinf(is_missing).any())
+print(torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
 
-# torch.save(X, 'processed/RNN/X.pt')
-# torch.save(y, 'processed/RNN/y.pt')
-# torch.save(is_missing, 'processed/RNN/is_missing.pt')
+torch.save(X, 'processed/RNN/X.pt')
+torch.save(y, 'processed/RNN/y.pt')
+torch.save(is_missing, 'processed/RNN/is_missing.pt')
+torch.save(time_missing, 'processed/RNN/time_missing.pt')
