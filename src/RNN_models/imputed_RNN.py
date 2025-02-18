@@ -16,12 +16,24 @@ from sklearn.model_selection import train_test_split
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 
+###
+# DATA PROCESSING
+###
+
+X = torch.load('processed/RNN/X.pt')
+y = torch.load('processed/RNN/y.pt')
+is_missing = torch.load('processed/RNN/is_missing.pt')
+
+# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test, mask_train, mask_test = train_test_split(
+    X, y, is_missing, test_size=0.2, random_state=42)
+
 ##
 # DEFINE CONSTANTS
 ###
 
 # data structure
-input_size = 112  # num features per visit
+input_size = X.shape[2]  # num features per visit
 output_size = 1
 
 # hyperparameters
@@ -33,34 +45,20 @@ lr = 1e-5
 eval = True
 
 ###
-# DATA PROCESSING
-###
-
-X = torch.load('processed/X.pt')
-y = torch.load('processed/y.pt')
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-###
 # DEFINE MODEL
 ###
 
 class SimpleRNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, num_layers=2, dropout=0.5):
         super(SimpleRNN, self).__init__()
-        # self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
-        # self.fc = nn.Linear(hidden_size, output_size)
         self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True, dropout=dropout)
         self.fc1 = nn.Linear(hidden_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, output_size)
         self.dropout = nn.Dropout(dropout)
         self.batch_norm = nn.BatchNorm1d(hidden_size)
 
-    def forward(self, x):
-        # h0 = torch.zeros(1, x.size(0), hidden_size).to(x.device)
-        # out, _ = self.rnn(x, h0)
-        # out = self.fc(out[:, -1, :])
-        # return out
+    def forward(self, x, is_missing_mask):
+        x = x * is_missing_mask
         h0 = torch.zeros(self.rnn.num_layers, x.size(0), self.rnn.hidden_size).to(x.device)
         out, _ = self.rnn(x, h0)
         out = self.batch_norm(out[:, -1, :])
@@ -82,7 +80,7 @@ eval = True
 losses = []
 for epoch in range(num_epochs):
     model.train()
-    outputs = model(X_train)
+    outputs = model(X_train, mask_train)
     loss = criterion(outputs.squeeze(), y_train)
 
     optimizer.zero_grad()
@@ -111,7 +109,7 @@ if eval:
     y_true = []
     y_pred = []
     with torch.no_grad():
-        outputs = model(X_test)
+        outputs = model(X_test, mask_test)
         probs = torch.sigmoid(outputs).squeeze()
         predicted_labels = (probs >= 0.5).float()
 

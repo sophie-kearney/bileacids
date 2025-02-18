@@ -111,8 +111,16 @@ data['GLCA_CDCA'] = data['GLCA'] / data['CDCA']
 ###
 
 cov_all = pd.read_csv("raw/gene_level_directed_merge_pupdated_apoe_prsnorm.csv")
-cov = cov_all[["RID","AGE","PTGENDER","ABETA","TAU","APOE_e2", "APOE_e4", "APOE_e2e4", "FDG", "WholeBrain"]]
+cov = cov_all[["RID","AGE","PTGENDER","ABETA","TAU","APOE_e2", "APOE_e4", "APOE_e2e4", "FDG", "WholeBrain", "AV45"]]
 data = pd.merge(cov, data, on="RID", how="right")
+
+###
+# CONVERT TO NUMERICAL
+###
+
+data['TAU'] = pd.to_numeric(data['TAU'], errors='coerce')
+data['ABETA'] = pd.to_numeric(data['ABETA'], errors='coerce')
+data['AV45'] = pd.to_numeric(data['AV45'], errors='coerce')
 
 ###
 # SAVE DATA
