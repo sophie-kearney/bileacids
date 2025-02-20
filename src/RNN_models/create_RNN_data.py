@@ -7,8 +7,6 @@ import pandas as pd
 import torch
 import sys, os
 
-from sympy.codegen.cnodes import static
-
 ###
 # DEFINE CONSTANTS
 ###

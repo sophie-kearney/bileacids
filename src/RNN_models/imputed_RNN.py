@@ -15,10 +15,23 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
-from models import RNN, GRU
+from models import RNN, GRU, MaskedGRU
 
-cohort = "pHCiAD"    # pMCIiAD pCHiAD
+##
+# DEFINE CONSTANTS
+###
+
+# hyperparameters
+num_epochs = 10000
+lr = 1e-5
+patience = 100
+test_trainval_ratio = .2
+train_val_ratio = .6
+
+# program parameters
+cohort = "pHCiAD"          # pMCIiAD pCHiAD
 model_choice = "simpleRNN" # GRU, simpleRNN, MaskedGRU
+eval = True
 
 ###
 # DATA PROCESSING
@@ -29,25 +42,19 @@ y = torch.load(f'processed/{cohort}/y.pt')
 is_missing = torch.load(f'processed/{cohort}/is_missing.pt')
 time_missing = torch.load(f'processed/{cohort}/time_missing.pt')
 
-(X_train, X_test, y_train, y_test, mask_train, mask_test, time_missing_test,
-    time_missing_train) = train_test_split(X, y, is_missing, time_missing,
-                                           test_size=0.2, random_state=42)
+# (X_train, X_test, y_train, y_test, mask_train, mask_test, time_missing_train, time_missing_test) = (
+#     train_test_split(X, y, is_missing, time_missing, test_size=0.2, random_state=42))
 
-##
-# DEFINE CONSTANTS
-###
+(X_train, X_temp, y_train, y_temp, mask_train, mask_temp, time_missing_train, time_missing_temp) = (
+    train_test_split(X, y, is_missing, time_missing, test_size=test_trainval_ratio, random_state=42))
+
+(X_val, X_test, y_val, y_test, mask_val, mask_test, time_missing_val, time_missing_test) = (
+    train_test_split(X_temp, y_temp, mask_temp, time_missing_temp, test_size=train_val_ratio, random_state=42))
 
 # data structure
 input_size = X.shape[2]  # num features per visit
 output_size = 1
-
-# hyperparameters
-num_epochs = 35000
 hidden_size = input_size
-lr = 1e-5
-
-# output of program
-eval = True
 
 ###
 # DEFINE MODEL
@@ -57,8 +64,8 @@ if model_choice == "simpleRNN":
     model = RNN(input_size, hidden_size, output_size)
 elif model_choice == "GRU":
     model = GRU(input_size, hidden_size, output_size)
-# elif model_choice == "MaskedGRU":
-#     model = MaskedGRU(input_size, hidden_size, output_size)
+elif model_choice == "MaskedGRU":
+    model = MaskedGRU(input_size, hidden_size, num_classes=2, num_layers=1)
 else:
     raise ValueError("Invalid model choice")
 
@@ -66,28 +73,57 @@ else:
 # TRAIN
 ###
 
-criterion = nn.BCEWithLogitsLoss()
+criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
 losses = []
+val_losses = []
+patience_counter = 0
+best_val_loss = np.inf
 for epoch in range(num_epochs):
     model.train()
-    outputs = model(X_train, mask_train)
-    loss = criterion(outputs.squeeze(), y_train)
+
+    if model_choice == "MaskedGRU":
+        logits, h_c = model(X_train, time_missing_train, mask_train)
+        loss = criterion(logits, y_train.long())
+    else:
+        output = model(X_train, mask_train)
+        loss = criterion(output.squeeze(), y_train)
 
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-
     losses.append(loss.item())
-    if (epoch + 1) % 10 == 0:
-        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
+
+    model.eval()
+    with torch.no_grad():
+        if model_choice == "MaskedGRU":
+            val_logits, _ = model(X_val, time_missing_val, mask_val)
+            val_loss = criterion(val_logits, y_val.long())
+        else:
+            val_output = model(X_val, mask_val)
+            val_loss = criterion(val_output.squeeze(), y_val)
+
+        val_losses.append(val_loss.item())
+        if (epoch + 1) % 10 == 0:
+            print(f'Epoch [{epoch + 1}/{num_epochs}], Test Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}')
+
+    if val_loss.item() < best_val_loss:
+        best_val_loss = val_loss.item()
+        patience_counter = 0
+    else:
+        patience_counter += 1
+
+    if patience_counter >= patience:
+        print(f'Early stopping at epoch {epoch + 1}')
+        break
 
 plt.figure()
-plt.plot(range(num_epochs), losses, label='Training Loss')
+plt.plot(range(len(losses)), losses, label='Training Loss')
+plt.plot(range(len(losses)), val_losses, label='Validation Loss')
 plt.xlabel('Epochs')
 plt.ylabel('Loss')
-plt.title('Training Loss over Epochs')
+plt.title('Training and Validation Loss over Epochs')
 plt.legend()
 plt.show()
 
@@ -101,11 +137,17 @@ if eval:
     y_true = []
     y_pred = []
     with torch.no_grad():
-        outputs = model(X_test, mask_test)
-        probs = torch.sigmoid(outputs).squeeze()
-        predicted_labels = (probs >= 0.5).float()
+        if model_choice == "MaskedGRU":
+            logits, _ = model(X_test, time_missing_test, mask_test)
+            probs = logits[:, 1]
+            predicted_labels = torch.argmax(logits, dim=1)
+        else:
+            output = model(X_test, mask_test)
+            probs = torch.sigmoid(output).squeeze()
+            predicted_labels = (probs >= 0.5).float()
 
     accuracy = accuracy_score(y_test.numpy(), predicted_labels.numpy())
+
     fpr, tpr, thresholds = roc_curve(y_test.numpy(), probs.numpy())
     roc_auc = auc(fpr, tpr)
 
