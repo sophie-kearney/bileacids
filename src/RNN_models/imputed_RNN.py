@@ -15,21 +15,23 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
+from models import RNN, GRU
+
+cohort = "pHCiAD"    # pMCIiAD pCHiAD
+model_choice = "simpleRNN" # GRU, simpleRNN, MaskedGRU
 
 ###
 # DATA PROCESSING
 ###
 
-# X = torch.load('processed/RNN/X.pt')
-# only BA and BA ratios
-X = torch.load('processed/RNN/X.pt')
-y = torch.load('processed/RNN/y.pt')
-is_missing = torch.load('processed/RNN/is_missing.pt')
-time_missing = torch.load('processed/RNN/time_missing.pt')
+X = torch.load(f'processed/{cohort}/X.pt')
+y = torch.load(f'processed/{cohort}/y.pt')
+is_missing = torch.load(f'processed/{cohort}/is_missing.pt')
+time_missing = torch.load(f'processed/{cohort}/time_missing.pt')
 
-# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-X_train, X_test, y_train, y_test, mask_train, mask_test = train_test_split(
-    X, y, is_missing, test_size=0.2, random_state=42)
+(X_train, X_test, y_train, y_test, mask_train, mask_test, time_missing_test,
+    time_missing_train) = train_test_split(X, y, is_missing, time_missing,
+                                           test_size=0.2, random_state=42)
 
 ##
 # DEFINE CONSTANTS
@@ -41,7 +43,7 @@ output_size = 1
 
 # hyperparameters
 num_epochs = 35000
-hidden_size = 20
+hidden_size = input_size
 lr = 1e-5
 
 # output of program
@@ -51,26 +53,14 @@ eval = True
 # DEFINE MODEL
 ###
 
-class SimpleRNN(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_layers=2, dropout=0.5):
-        super(SimpleRNN, self).__init__()
-        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True, dropout=dropout)
-        self.fc1 = nn.Linear(hidden_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, output_size)
-        self.dropout = nn.Dropout(dropout)
-        self.batch_norm = nn.BatchNorm1d(hidden_size)
-
-    def forward(self, x, is_missing_mask):
-        x = x * is_missing_mask
-        h0 = torch.zeros(self.rnn.num_layers, x.size(0), self.rnn.hidden_size).to(x.device)
-        out, _ = self.rnn(x, h0)
-        out = self.batch_norm(out[:, -1, :])
-        out = F.relu(self.fc1(out))
-        out = self.dropout(out)
-        out = self.fc2(out)
-        return out
-
-model = SimpleRNN(input_size, hidden_size, output_size)
+if model_choice == "simpleRNN":
+    model = RNN(input_size, hidden_size, output_size)
+elif model_choice == "GRU":
+    model = GRU(input_size, hidden_size, output_size)
+# elif model_choice == "MaskedGRU":
+#     model = MaskedGRU(input_size, hidden_size, output_size)
+else:
+    raise ValueError("Invalid model choice")
 
 ###
 # TRAIN
@@ -79,7 +69,6 @@ model = SimpleRNN(input_size, hidden_size, output_size)
 criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
-eval = True
 losses = []
 for epoch in range(num_epochs):
     model.train()
@@ -117,7 +106,6 @@ if eval:
         predicted_labels = (probs >= 0.5).float()
 
     accuracy = accuracy_score(y_test.numpy(), predicted_labels.numpy())
-
     fpr, tpr, thresholds = roc_curve(y_test.numpy(), probs.numpy())
     roc_auc = auc(fpr, tpr)
 

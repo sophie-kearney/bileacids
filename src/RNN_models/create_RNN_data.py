@@ -5,12 +5,16 @@
 import numpy as np
 import pandas as pd
 import torch
-import sys
+import sys, os
+
+from sympy.codegen.cnodes import static
+
 ###
 # DEFINE CONSTANTS
 ###
 
 num_mets = 111
+cohort = "pHCiAD"
 
 ###
 # PARSE DATA
@@ -29,9 +33,6 @@ end_BA_ratio = data.columns.get_loc("GLCA_CDCA") + 1
 data.iloc[:, begin_met:end_met] = np.log10(data.iloc[:, begin_met:end_met].replace(0, np.nan))
 data.iloc[:, begin_BA_ratio:begin_BA_ratio] = np.log10(data.iloc[:, begin_BA_ratio:begin_BA_ratio].replace(0, np.nan))
 
-# isoloate pHC patients
-pHC = data.groupby("RID").filter(lambda x: (x["DX_VALS"] == 1).all())
-
 # isolate iAD patients
 data["DX_VALS"] = data["DX_VALS"].replace(3, 2)
 rids = []
@@ -45,13 +46,25 @@ for rid, patient in data.groupby("RID"):
             if 2 not in dxs[idx_4:] and 1 not in dxs[idx_2:idx_4]:
                 rids.append(rid)
 
-# remove specific cases that fail previous filtering
+# isolate AD cases
 iAD = data[data["RID"].isin(rids)]
 
-pHCiAD = pd.concat([pHC, iAD], ignore_index=True)
+if cohort == "pHCiAD":
+    # isoloate pHC patients
+    pHC = data.groupby("RID").filter(lambda x: (x["DX_VALS"] == 1).all())
+    # combine cohorts
+    pHCiAD = pd.concat([pHC, iAD], ignore_index=True)
+elif cohort == "pMCIiAD":
+    # isoloate pHC patients
+    pMCI = data.groupby("RID").filter(lambda x: x["DX_VALS"].isin([2, 3]).all())
+    # combine cohorts - TODO change pHCiAD later
+    pHCiAD = pd.concat([pMCI, iAD], ignore_index=True)
+    pHCiAD.to_csv("processed/pMCIiAD.csv", index=False)
+else:
+    raise ValueError("Invalid cohort")
 
 # remove infinite values and NAs with 0 in the ratio columns, these are coming from dividing by 0
-pHCiAD[begin_BA_ratio:end_BA_ratio] = pHCiAD[begin_BA_ratio:end_BA_ratio].replace([np.inf, -np.inf, np.nan], 0)
+# pHCiAD[begin_BA_ratio:end_BA_ratio] = pHCiAD[begin_BA_ratio:end_BA_ratio].replace([np.inf, -np.inf, np.nan], 0)
 
 ###
 # IMPUTATION
@@ -64,6 +77,8 @@ X = []
 y = []
 is_missing = []
 time_missing = []
+rids = []
+static_covariates = []
 
 for rid, patient in pHCiAD.groupby("RID"):
     curr_seq = []    # current sequence of visits for one patient
@@ -140,6 +155,9 @@ for rid, patient in pHCiAD.groupby("RID"):
         is_missing.append(missingness)
         time_missing.append(time_miss)
 
+        cov = [rid, patient.iloc[0]["AGE"], patient.iloc[0]["PTGENDER"], patient.iloc[0]["APOE_e2e4"]]
+        static_covariates.append(cov) # TODO - there are NA values in the covariates
+
         # add the classification to y
         if 4 in patient["DX_VALS"].values:
             y.append(1)
@@ -150,15 +168,22 @@ X = torch.tensor(X, dtype=torch.float32)
 y = torch.tensor(y, dtype=torch.float32)
 is_missing = torch.tensor(is_missing, dtype=torch.float32)
 time_missing = torch.tensor(time_missing, dtype=torch.float32)
+static_covariates = torch.tensor(static_covariates, dtype=torch.float32)
 
 # no NAs, no Infs
 X = torch.tensor(np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0), dtype=torch.float32)
-print(torch.isnan(X).any(), torch.isinf(X).any())
-print(torch.isnan(y).any(), torch.isinf(y).any())
-print(torch.isnan(is_missing).any(), torch.isinf(is_missing).any())
-print(torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
+print("                         IS NA         IS INF")
+print("X                 ", torch.isnan(X).any(), torch.isinf(X).any())
+print("y                 ", torch.isnan(y).any(), torch.isinf(y).any())
+print("is_missing        ", torch.isnan(is_missing).any(), torch.isinf(is_missing).any())
+print("time_missing      ", torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
+print("static_covariates ", torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
 
-torch.save(X, 'processed/RNN/X.pt')
-torch.save(y, 'processed/RNN/y.pt')
-torch.save(is_missing, 'processed/RNN/is_missing.pt')
-torch.save(time_missing, 'processed/RNN/time_missing.pt')
+if not os.path.exists(f'processed/{cohort}'):
+    os.makedirs(f'processed/{cohort}')
+
+torch.save(X, f'processed/{cohort}/X.pt')
+torch.save(y, f'processed/{cohort}/y.pt')
+torch.save(is_missing, f'processed/{cohort}/is_missing.pt')
+torch.save(time_missing, f'processed/{cohort}/time_missing.pt')
+torch.save(static_covariates, f'processed/{cohort}/static_covariates.pt')
