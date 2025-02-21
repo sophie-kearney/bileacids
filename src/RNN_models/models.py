@@ -7,12 +7,12 @@ class RNN(nn.Module):
         super(RNN, self).__init__()
         self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True, dropout=dropout)
         self.fc1 = nn.Linear(hidden_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, output_size)
+        self.fc2 = nn.Linear(hidden_size, 1)
         self.dropout = nn.Dropout(dropout)
         self.batch_norm = nn.BatchNorm1d(hidden_size)
 
     def forward(self, x, is_missing_mask):
-        x = x * is_missing_mask
+        # x = x * is_missing_mask
         h0 = torch.zeros(self.rnn.num_layers, x.size(0), self.rnn.hidden_size).to(x.device)
         out, _ = self.rnn(x, h0)
         out = self.batch_norm(out[:, -1, :])
