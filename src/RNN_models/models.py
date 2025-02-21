@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class RNN(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_layers=2, dropout=0.5):
+    def __init__(self, input_size, hidden_size, output_size, num_layers=5, dropout=0.5):
         super(RNN, self).__init__()
         self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True, dropout=dropout)
         self.fc1 = nn.Linear(hidden_size, hidden_size)
