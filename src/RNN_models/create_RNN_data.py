@@ -12,7 +12,8 @@ import sys, os
 ###
 
 num_mets = 111
-cohort = "pHCiAD"
+cohort = "pHCiAD" # pHCiAD, pMCIiAD
+imputed = False
 
 ###
 # PARSE DATA
@@ -68,120 +69,155 @@ else:
 # IMPUTATION
 ###
 
-all_visits = sorted(pHCiAD["VISCODE2"].unique(), key=lambda x: (x != 'bl', int(x[1:]) if x[1:].isdigit() else float('inf')))
-visit_mapping = {visit: (0 if visit == 'bl' else int(visit[1:])) for visit in pHCiAD["VISCODE2"].unique()}
+if imputed:
+    all_visits = sorted(pHCiAD["VISCODE2"].unique(), key=lambda x: (x != 'bl', int(x[1:]) if x[1:].isdigit() else float('inf')))
+    visit_mapping = {visit: (0 if visit == 'bl' else int(visit[1:])) for visit in pHCiAD["VISCODE2"].unique()}
 
-X = []
-y = []
-is_missing = []
-time_missing = []
-rids = []
-static_covariates = []
+    X = []
+    y = []
+    is_missing = []
+    time_missing = []
+    rids = []
+    static_covariates = []
 
-for rid, patient in pHCiAD.groupby("RID"):
-    curr_seq = []    # current sequence of visits for one patient
-    no_bl = False    # flag for if patient has missing visits before any are filled
-    missingness = [] # length of attributes, 1 if filled, 0 if missing
-    time_miss = []   # length of attributes, 0 if no time since last and delta time if there is
+    for rid, patient in pHCiAD.groupby("RID"):
+        curr_seq = []    # current sequence of visits for one patient
+        no_bl = False    # flag for if patient has missing visits before any are filled
+        missingness = [] # length of attributes, 1 if filled, 0 if missing
+        time_miss = []   # length of attributes, 0 if no time since last and delta time if there is
 
-    for visit in all_visits:
-        # patient has data for that visit
-        if visit in patient["VISCODE2"].values:
-            row = patient[patient["VISCODE2"] == visit]
-            met_data = [float(x) for x in row.iloc[0, begin_met:end_met].values.tolist()] + \
-                       [float(x) for x in row.iloc[0, begin_BA_ratio:end_BA_ratio].values.tolist()]
+        for visit in all_visits:
+            # patient has data for that visit
+            if visit in patient["VISCODE2"].values:
+                row = patient[patient["VISCODE2"] == visit]
+                met_data = [float(x) for x in row.iloc[0, begin_met:end_met].values.tolist()] + \
+                           [float(x) for x in row.iloc[0, begin_BA_ratio:end_BA_ratio].values.tolist()]
 
-            # if there are missing values, forward fill and track in missingness
-            curr_miss = []
-            curr_time = []
-            for i in range(len(met_data)):
-                if np.isnan(met_data[i]):
-                    # forward fill data from the last visit to this visit
-                    if curr_seq != []:
-                        met_data[i] = curr_seq[-1][i]
+                # if there are missing values, forward fill and track in missingness
+                curr_miss = []
+                curr_time = []
+                for i in range(len(met_data)):
+                    if np.isnan(met_data[i]):
+                        # forward fill data from the last visit to this visit
+                        if curr_seq != []:
+                            met_data[i] = curr_seq[-1][i]
+                        else:
+                            met_data[i] = 0 # TODO - this is a placeholder, we should use a better imputation method
+                        curr_miss.append(0)
+
+                        if visit != 'bl':
+                            # get change in time since last filled in visit
+                            prev_visit = -1
+                            while (prev_visit + len(curr_seq) > 0) and (missingness[prev_visit][i] == 0):
+                                prev_visit -= 1
+                            prev_visit += len(curr_seq) # update prev_visit so we are counting from the left again and not the right
+                            last = visit_mapping[all_visits[prev_visit]]
+                            cur = visit_mapping[visit]
+                            diff = cur-last
+                        else:
+                            diff = 0
+                        curr_time.append(diff)
+
                     else:
-                        met_data[i] = 0 # TODO - this is a placeholder, we should use a better imputation method
-                    curr_miss.append(0)
+                        curr_miss.append(1)
+                        curr_time.append(0)
 
-                    if visit != 'bl':
-                        # get change in time since last filled in visit
-                        prev_visit = -1
-                        while (prev_visit + len(curr_seq) > 0) and (missingness[prev_visit][i] == 0):
-                            prev_visit -= 1
-                        prev_visit += len(curr_seq) # update prev_visit so we are counting from the left again and not the right
-                        last = visit_mapping[all_visits[prev_visit]]
-                        cur = visit_mapping[visit]
-                        diff = cur-last
-                    else:
-                        diff = 0
-                    curr_time.append(diff)
+                missingness.append(curr_miss)
+                curr_seq.append(met_data)
+                time_miss.append(curr_time)
+
+            # the patient doesn't have data for that visit
+            else:
+                if curr_seq != []:
+                    # get change in time since last filled in visit
+                    prev_visit = -1
+                    while missingness[prev_visit][0] == 0:
+                        prev_visit -= 1
+                    prev_visit += len(curr_seq)
+                    last = visit_mapping[all_visits[prev_visit]]
+                    cur = visit_mapping[visit]
+                    diff = cur-last
+                    time_miss.append([diff] * len(curr_seq[-1]))
+
+                    # forward fill imputation from last curr_seq
+                    curr_seq.append(curr_seq[-1])
+                    missingness.append([0] * len(curr_seq[-1])) # we have to fill every value so it is all 0
 
                 else:
-                    curr_miss.append(1)
-                    curr_time.append(0)
+                    # patient has missing visits before any are filled, does not have baseline data
+                    no_bl = True
+                    continue
 
-            missingness.append(curr_miss)
-            curr_seq.append(met_data)
-            time_miss.append(curr_time)
+        # if the patient did have a baseline value, add it to our X
+        if not no_bl:
 
-        # the patient doesn't have data for that visit
-        else:
-            if curr_seq != []:
-                # get change in time since last filled in visit
-                prev_visit = -1
-                while missingness[prev_visit][0] == 0:
-                    prev_visit -= 1
-                prev_visit += len(curr_seq)
-                last = visit_mapping[all_visits[prev_visit]]
-                cur = visit_mapping[visit]
-                diff = cur-last
-                time_miss.append([diff] * len(curr_seq[-1]))
+            X.append(curr_seq)
+            is_missing.append(missingness)
+            time_missing.append(time_miss)
 
-                # forward fill imputation from last curr_seq
-                curr_seq.append(curr_seq[-1])
-                missingness.append([0] * len(curr_seq[-1])) # we have to fill every value so it is all 0
+            cov = [rid, patient.iloc[0]["AGE"], patient.iloc[0]["PTGENDER"], patient.iloc[0]["APOE_e2e4"]]
+            static_covariates.append(cov) # TODO - there are NA values in the covariates
 
+            # add the classification to y
+            if 4 in patient["DX_VALS"].values:
+                y.append(1)
             else:
-                # patient has missing visits before any are filled, does not have baseline data
-                no_bl = True
-                continue
+                y.append(0)
 
-    # if the patient did have a baseline value, add it to our X
-    if not no_bl:
+    X = torch.tensor(X, dtype=torch.float32)
+    y = torch.tensor(y, dtype=torch.float32)
+    is_missing = torch.tensor(is_missing, dtype=torch.float32)
+    time_missing = torch.tensor(time_missing, dtype=torch.float32)
+    static_covariates = torch.tensor(static_covariates, dtype=torch.float32)
 
-        X.append(curr_seq)
-        is_missing.append(missingness)
-        time_missing.append(time_miss)
+    # no NAs, no Infs
+    X = torch.tensor(np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0), dtype=torch.float32)
+    print("                         IS NA         IS INF")
+    print("X                 ", torch.isnan(X).any(), torch.isinf(X).any())
+    print("y                 ", torch.isnan(y).any(), torch.isinf(y).any())
+    print("is_missing        ", torch.isnan(is_missing).any(), torch.isinf(is_missing).any())
+    print("time_missing      ", torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
+    print("static_covariates ", torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
 
-        cov = [rid, patient.iloc[0]["AGE"], patient.iloc[0]["PTGENDER"], patient.iloc[0]["APOE_e2e4"]]
-        static_covariates.append(cov) # TODO - there are NA values in the covariates
+    if not os.path.exists(f'processed/{cohort}'):
+        os.makedirs(f'processed/{cohort}')
 
-        # add the classification to y
+    torch.save(X, f'processed/{cohort}/X.pt')
+    torch.save(y, f'processed/{cohort}/y.pt')
+    torch.save(is_missing, f'processed/{cohort}/is_missing.pt')
+    torch.save(time_missing, f'processed/{cohort}/time_missing.pt')
+    torch.save(static_covariates, f'processed/{cohort}/static_covariates.pt')
+
+else:
+    X = []
+    y = []
+    rids = []
+    static_covariates = []
+
+    for rid, patient in pHCiAD.groupby("RID"):
+        met_data = np.concatenate([patient.iloc[:, begin_met:end_met].fillna(0).values,
+                                   patient.iloc[:, begin_BA_ratio:end_BA_ratio].fillna(0).values], axis=1)
+        cov = [patient.iloc[0]["AGE"], patient.iloc[0]["PTGENDER"], patient.iloc[0]["APOE_e2e4"]]
+
         if 4 in patient["DX_VALS"].values:
             y.append(1)
         else:
             y.append(0)
 
-X = torch.tensor(X, dtype=torch.float32)
-y = torch.tensor(y, dtype=torch.float32)
-is_missing = torch.tensor(is_missing, dtype=torch.float32)
-time_missing = torch.tensor(time_missing, dtype=torch.float32)
-static_covariates = torch.tensor(static_covariates, dtype=torch.float32)
+        static_covariates.append(cov)
+        X.append(met_data)
+        rids.append(rid)
 
-# no NAs, no Infs
-X = torch.tensor(np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0), dtype=torch.float32)
-print("                         IS NA         IS INF")
-print("X                 ", torch.isnan(X).any(), torch.isinf(X).any())
-print("y                 ", torch.isnan(y).any(), torch.isinf(y).any())
-print("is_missing        ", torch.isnan(is_missing).any(), torch.isinf(is_missing).any())
-print("time_missing      ", torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
-print("static_covariates ", torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
+    X = torch.nn.utils.rnn.pad_sequence([torch.tensor(x, dtype=torch.float32) for x in X], batch_first=True)
+    X = torch.tensor(np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0), dtype=torch.float32)
 
-if not os.path.exists(f'processed/{cohort}'):
-    os.makedirs(f'processed/{cohort}')
+    y = torch.tensor(y, dtype=torch.float32)
+    static_covariates = torch.tensor(static_covariates, dtype=torch.float32)
+    rids = torch.tensor(rids, dtype=torch.float32)
 
-torch.save(X, f'processed/{cohort}/X.pt')
-torch.save(y, f'processed/{cohort}/y.pt')
-torch.save(is_missing, f'processed/{cohort}/is_missing.pt')
-torch.save(time_missing, f'processed/{cohort}/time_missing.pt')
-torch.save(static_covariates, f'processed/{cohort}/static_covariates.pt')
+    if not os.path.exists(f'processed/{cohort}/not_imputed'):
+        os.makedirs(f'processed/{cohort}/not_imputed')
+
+    torch.save(X, f'processed/{cohort}/not_imputed/X.pt')
+    torch.save(y, f'processed/{cohort}/not_imputed/y.pt')
+    torch.save(static_covariates, f'processed/{cohort}/not_imputed/static_covariates.pt')

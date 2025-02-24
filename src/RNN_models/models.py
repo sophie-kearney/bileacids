@@ -11,7 +11,7 @@ class RNN(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.batch_norm = nn.BatchNorm1d(hidden_size)
 
-    def forward(self, x, is_missing_mask):
+    def forward(self, x):
         # x = x * is_missing_mask
         h0 = torch.zeros(self.rnn.num_layers, x.size(0), self.rnn.hidden_size).to(x.device)
         out, _ = self.rnn(x, h0)
@@ -41,7 +41,7 @@ class GRU(nn.Module):
         # Identity mask to restrict interactions to diagonal form
         self.register_buffer("mask", torch.eye(hidden_size))
 
-    def forward(self, x, is_missing_mask):
+    def forward(self, x):
         batch_size, seq_len, _ = x.shape
         h = torch.zeros(batch_size, self.hidden_size).to(x.device)
 
