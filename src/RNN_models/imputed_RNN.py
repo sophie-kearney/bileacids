@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from pandas import read_csv
+from pandas.core.common import random_state
 from sklearn.metrics import accuracy_score, roc_curve, auc, precision_recall_curve, r2_score
 import matplotlib.pyplot as plt
 import os, re, sys
@@ -22,24 +23,25 @@ from models import RNN, GRU, MaskedGRU
 ###
 
 # hyperparameters
-max_norm = 0.5
-l1_lambda = 1e-4
+max_norm = 1.5
+l1_lambda = 9e-5
 hidden_size = 128
 batch_size = 50
-num_epochs = 2000
-lr = 1e-5
-test_trainval_ratio = .2
-train_val_ratio = .2
+num_epochs = 500
+lr = 7e-05
+test_trainval_ratio = 0.2
+train_val_ratio = 0.2
 dropout = 0.7
-num_layers = 4
-patience = 350
-early_stopping = False
+num_layers = 2
+patience = 75
+early_stopping = True
 
 # program parameters
-cohort = "pHCiAD"        # pMCIiAD pHCiAD
-model_choice = "simpleRNN"      # GRU, simpleRNN, MaskedGRU
+cohort = "pHCiAD"            # pMCIiAD pHCiAD
+model_choice = "MaskedGRU"   # GRU, simpleRNN, MaskedGRU
 eval = True
-imputed = False
+imputed = True
+output_size = 1
 
 ###
 # DATA PROCESSING
@@ -82,16 +84,22 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 input_size = X.shape[2]  # num features per visit
 
 # get the previous best AUC to see if our model performs better
-def get_saved_auc(cohort, model_choice):
+def get_saved_auc(cohort, model_choice, imputation):
     model_dir = f'models/{cohort}'
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
         return 0.0
-    saved_models = [f for f in os.listdir(model_dir) if f.startswith(model_choice)]
-    if not saved_models:
-        return 0.0
-    latest_model = max(saved_models, key=lambda f: float(re.search(r'_(\d+\.\d+)', f).group(1)))
-    return float(re.search(r'_(\d+\.\d+)', latest_model).group(1))
+
+    all_files = os.listdir(model_dir)
+    best_roc = 0
+    for f in all_files:
+        chars = f.replace(".pth", "").split("_")
+        if chars[0] == model_choice:
+            if not imputation and chars[-1] == "noImp":
+                best_roc = float(chars[1])
+            if imputation and chars[-1] != "noImp":
+                best_roc = float(chars[1])
+    return best_roc
 
 ###
 # DEFINE MODEL
@@ -102,7 +110,8 @@ if model_choice == "simpleRNN":
 elif model_choice == "GRU":
     model = GRU(input_size, hidden_size, 1)
 elif model_choice == "MaskedGRU":
-    model = MaskedGRU(input_size, input_size, num_classes=2, num_layers=1)
+    hidden_size = input_size
+    model = MaskedGRU(input_size, hidden_size, num_classes=2, num_layers=num_layers)
 else:
     raise ValueError("Invalid model choice")
 print(model)
@@ -126,19 +135,20 @@ best_val_loss = np.inf
 
 for epoch in range(num_epochs):
     model.train()
-
     train_loss = 0
     for batch in train_loader:
         if imputed:
-            X_batch, y_batch, time_missing_batch, mask_batch = batch
+            X_batch, y_batch, mask_batch, time_missing_batch = batch
         else:
             X_batch, y_batch = batch
+            # prevent unbound variables
+            time_missing_batch, mask_batch = None, None
+
         if model_choice == "MaskedGRU":
             logits, h_c = model(X_batch, time_missing_batch, mask_batch)
             loss = criterion(logits, y_batch.long())
         else:
             output = model(X_batch)
-            probabilities = torch.sigmoid(output).squeeze(1)
             loss = criterion(output.squeeze(1), y_batch)
 
         l1_norm = sum(p.abs().sum() for p in model.parameters())
@@ -158,7 +168,7 @@ for epoch in range(num_epochs):
     with torch.no_grad():
         for val_batch in val_loader:
             if imputed:
-                X_val_batch, y_val_batch, time_missing_val_batch, mask_val_batch = val_batch
+                X_val_batch, y_val_batch, mask_val_batch, time_missing_val_batch = val_batch
             else:
                 X_val_batch, y_val_batch = val_batch
             if model_choice == "MaskedGRU":
@@ -172,6 +182,8 @@ for epoch in range(num_epochs):
     val_loss /= len(val_loader)
     val_losses.append(val_loss)
 
+    if train_loss > 4 or val_loss > 4:
+        raise ValueError("Loss too high. Start over")
 
     if (epoch + 1) % 10 == 0:
         print(f'Epoch [{epoch + 1}/{num_epochs}], Test Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}')
@@ -209,12 +221,12 @@ if eval:
     with torch.no_grad():
         for test_batch in test_loader:
             if imputed:
-                X_test_batch, y_test_batch, time_missing_test_batch, mask_test_batch = test_batch
+                X_test_batch, y_test_batch, mask_test_batch, time_missing_test_batch = test_batch
             else:
                 X_test_batch, y_test_batch = test_batch
             if model_choice == "MaskedGRU":
                 logits, _ = model(X_test_batch, time_missing_test_batch, mask_test_batch)
-                probs = logits[:, 1]
+                probs = torch.softmax(logits, dim=1)[:, 1]
                 predicted_labels = torch.argmax(logits, dim=1)
             else:
                 output = model(X_test_batch)
@@ -229,15 +241,6 @@ if eval:
     y_pred = np.concatenate(y_pred)
     all_probs = np.concatenate(all_probs)
 
-    # accuracy = accuracy_score(y_true, y_pred)
-    # fpr, tpr, thresholds = roc_curve(y_true, all_probs)
-    # roc_auc = auc(fpr, tpr)
-    #
-    # print("\n--- PERFORMANCE ---")
-    # print(f"accuracy: {accuracy:.4f}")
-    # print(f"roc: {roc_auc:.4f}")
-    # print("-------------------")
-
     accuracy = accuracy_score(y_true, y_pred)
     fpr, tpr, thresholds = roc_curve(y_true, all_probs)
     roc_auc = auc(fpr, tpr)
@@ -246,7 +249,7 @@ if eval:
     r2 = r2_score(y_true, all_probs)
 
     print("\n--- PERFORMANCE ---")
-    print(f"{cohort} {model_choice}")
+    print(f"{cohort} {model_choice} {'imputed' if imputed else 'not imputed'}")
     print(f"accuracy: {accuracy:.4f}")
     print(f"roc: {roc_auc:.4f}")
     print(f"aproc: {aproc:.4f}")
@@ -264,8 +267,19 @@ if eval:
     plt.legend(loc='lower right')
     plt.show()
 
-    if roc_auc > get_saved_auc(cohort, model_choice):
-        if imputed:
-            torch.save(model.state_dict(), f'models/{cohort}/{model_choice}_{roc_auc:.4f}.pth')
-        else:
-            torch.save(model.state_dict(), f'models/{cohort}/{model_choice}_{roc_auc:.4f}_noImp.pth')
+    if roc_auc > get_saved_auc(cohort, model_choice, imputed): # TODO - fix this function to actually get highest ROC
+        file_path = f"models/{cohort}/{model_choice}_{roc_auc:.4f}"
+        if not imputed:
+            file_path += "_noImp"
+        torch.save(model.state_dict(), f"{file_path}")
+
+        hyperparamters = {"max_norm": max_norm, "l1_lambda": l1_lambda, "hidden_size": hidden_size,
+                          "batch_size": batch_size, "num_epochs": num_epochs, "lr": lr,
+                          "test_trainval_ratio": test_trainval_ratio, "train_val_ratio": train_val_ratio,
+                          "dropout": dropout, "num_layers": num_layers, "patience": patience,
+                          "early_stopping": early_stopping, "cohort": cohort, "model_choice": model_choice,
+                          "imputed": imputed, "accuracy": accuracy, "roc_auc": roc_auc, "aproc": aproc, "r2": r2}
+
+        with open(f"{file_path}_hyperparameters.txt", "w") as f:
+            for key, value in hyperparamters.items():
+                f.write(f"{key} = {value}\n")

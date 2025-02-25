@@ -13,7 +13,7 @@ import sys, os
 
 num_mets = 111
 cohort = "pHCiAD" # pHCiAD, pMCIiAD
-imputed = False
+imputed = True
 
 ###
 # PARSE DATA
