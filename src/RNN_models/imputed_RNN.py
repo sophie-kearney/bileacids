@@ -24,24 +24,28 @@ from models import RNN, GRU, MaskedGRU
 
 # hyperparameters
 max_norm = 1.5
-l1_lambda = 9e-5
-hidden_size = 128
+l1_lambda = 9e-05
+hidden_size = 111
 batch_size = 50
 num_epochs = 500
 lr = 7e-05
 test_trainval_ratio = 0.2
 train_val_ratio = 0.2
 dropout = 0.7
-num_layers = 2
-patience = 75
+num_layers = 3
+patience = 80
 early_stopping = True
 
 # program parameters
-cohort = "pHCiAD"            # pMCIiAD pHCiAD
-model_choice = "MaskedGRU"   # GRU, simpleRNN, MaskedGRU
+# cohort = "pMCIiAD"            # pMCIiAD pHCiAD
+# model_choice = "simpleRNN"   # GRU, simpleRNN, MaskedGRU
 eval = True
-imputed = True
+# imputed = True
 output_size = 1
+
+cohort = os.getenv('COHORT', 'pMCIiAD')
+model_choice = os.getenv('MODEL', 'simpleRNN')
+imputed = os.getenv('IMPUTED','True').lower() in ('true', '1', 't')
 
 ###
 # DATA PROCESSING
@@ -114,7 +118,7 @@ elif model_choice == "MaskedGRU":
     model = MaskedGRU(input_size, hidden_size, num_classes=2, num_layers=num_layers)
 else:
     raise ValueError("Invalid model choice")
-print(model)
+# print(model)
 
 ###
 # TRAIN
@@ -185,8 +189,8 @@ for epoch in range(num_epochs):
     if train_loss > 4 or val_loss > 4:
         raise ValueError("Loss too high. Start over")
 
-    if (epoch + 1) % 10 == 0:
-        print(f'Epoch [{epoch + 1}/{num_epochs}], Test Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}')
+    # if (epoch + 1) % 10 == 0:
+    #     print(f'Epoch [{epoch + 1}/{num_epochs}], Test Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}')
 
     if val_loss < best_val_loss:
         best_val_loss = val_loss
@@ -194,18 +198,19 @@ for epoch in range(num_epochs):
     else:
         patience_counter += 1
 
-    if early_stopping and patience_counter >= patience:
-        print(f'Early stopping at epoch {epoch + 1}')
+    # if early_stopping and (patience_counter >= patience or val_loss > train_loss):
+    if early_stopping and val_loss > train_loss:
+        # print(f'Early stopping at epoch {epoch + 1}')
         break
 
-plt.figure()
-plt.plot(range(len(losses)), losses, label='Training Loss')
-plt.plot(range(len(losses)), val_losses, label='Validation Loss')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
-plt.title('Training and Validation Loss over Epochs')
-plt.legend()
-plt.show()
+# plt.figure()
+# plt.plot(range(len(losses)), losses, label='Training Loss')
+# plt.plot(range(len(losses)), val_losses, label='Validation Loss')
+# plt.xlabel('Epochs')
+# plt.ylabel('Loss')
+# plt.title('Training and Validation Loss over Epochs')
+# plt.legend()
+# plt.show()
 
 ###
 # TEST MODEL
@@ -248,38 +253,40 @@ if eval:
     aproc = auc(recall, precision)
     r2 = r2_score(y_true, all_probs)
 
-    print("\n--- PERFORMANCE ---")
-    print(f"{cohort} {model_choice} {'imputed' if imputed else 'not imputed'}")
-    print(f"accuracy: {accuracy:.4f}")
-    print(f"roc: {roc_auc:.4f}")
-    print(f"aproc: {aproc:.4f}")
-    print(f"R^2: {r2:.4f}")
-    print("-------------------")
+    # print("\n--- PERFORMANCE ---")
+    # print(f"{cohort} {model_choice} {'imputed' if imputed else 'not imputed'} {X.shape[1]}")
+    # print(f"accuracy: {accuracy:.4f}")
+    # print(f"roc: {roc_auc:.4f}")
+    # print(f"aproc: {aproc:.4f}")
+    # print(f"R^2: {r2:.4f}")
+    # print("-------------------")
 
-    plt.figure()
-    plt.plot(fpr, tpr, color='navy', lw=1, label='ROC curve (area = %0.2f)' % roc_auc)
-    plt.plot([0, 1], [0, 1], color='grey', lw=1, linestyle='--')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic')
-    plt.legend(loc='lower right')
-    plt.show()
+    print(f"{accuracy:.4f} {roc_auc:.4f} {aproc:.4f}")
 
-    if roc_auc > get_saved_auc(cohort, model_choice, imputed): # TODO - fix this function to actually get highest ROC
-        file_path = f"models/{cohort}/{model_choice}_{roc_auc:.4f}"
-        if not imputed:
-            file_path += "_noImp"
-        torch.save(model.state_dict(), f"{file_path}")
+    # plt.figure()
+    # plt.plot(fpr, tpr, color='navy', lw=1, label='ROC curve (area = %0.2f)' % roc_auc)
+    # plt.plot([0, 1], [0, 1], color='grey', lw=1, linestyle='--')
+    # plt.xlim([0.0, 1.0])
+    # plt.ylim([0.0, 1.05])
+    # plt.xlabel('False Positive Rate')
+    # plt.ylabel('True Positive Rate')
+    # plt.title('Receiver Operating Characteristic')
+    # plt.legend(loc='lower right')
+    # plt.show()
 
-        hyperparamters = {"max_norm": max_norm, "l1_lambda": l1_lambda, "hidden_size": hidden_size,
-                          "batch_size": batch_size, "num_epochs": num_epochs, "lr": lr,
-                          "test_trainval_ratio": test_trainval_ratio, "train_val_ratio": train_val_ratio,
-                          "dropout": dropout, "num_layers": num_layers, "patience": patience,
-                          "early_stopping": early_stopping, "cohort": cohort, "model_choice": model_choice,
-                          "imputed": imputed, "accuracy": accuracy, "roc_auc": roc_auc, "aproc": aproc, "r2": r2}
-
-        with open(f"{file_path}_hyperparameters.txt", "w") as f:
-            for key, value in hyperparamters.items():
-                f.write(f"{key} = {value}\n")
+    # if roc_auc > get_saved_auc(cohort, model_choice, imputed): # TODO - fix this function to actually get highest ROC
+    #     file_path = f"models/{cohort}/{model_choice}_{roc_auc:.4f}"
+    #     if not imputed:
+    #         file_path += "_noImp"
+    #     torch.save(model.state_dict(), f"{file_path}")
+    #
+    #     hyperparamters = {"max_norm": max_norm, "l1_lambda": l1_lambda, "hidden_size": hidden_size,
+    #                       "batch_size": batch_size, "num_epochs": num_epochs, "lr": lr,
+    #                       "test_trainval_ratio": test_trainval_ratio, "train_val_ratio": train_val_ratio,
+    #                       "dropout": dropout, "num_layers": num_layers, "patience": patience,
+    #                       "early_stopping": early_stopping, "cohort": cohort, "model_choice": model_choice,
+    #                       "imputed": imputed, "accuracy": accuracy, "roc_auc": roc_auc, "aproc": aproc, "r2": r2}
+    #
+    #     with open(f"{file_path}_hyperparameters.txt", "w") as f:
+    #         for key, value in hyperparamters.items():
+    #             f.write(f"{key} = {value}\n")

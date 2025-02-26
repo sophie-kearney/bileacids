@@ -12,8 +12,13 @@ import sys, os
 ###
 
 num_mets = 111
-cohort = "pHCiAD" # pHCiAD, pMCIiAD
-imputed = True
+# cohort = "pMCIiAD" # pHCiAD, pMCIiAD
+cohort = os.getenv('COHORT', 'pMCIiAD')
+imputed = os.getenv('IMPUTED', 'True').lower() in ('true', '1', 't')
+k_env = os.getenv('K')
+k = int(k_env) if k_env else None
+
+print(k, imputed, cohort)
 
 ###
 # PARSE DATA
@@ -71,6 +76,10 @@ else:
 
 if imputed:
     all_visits = sorted(pHCiAD["VISCODE2"].unique(), key=lambda x: (x != 'bl', int(x[1:]) if x[1:].isdigit() else float('inf')))
+
+    if k is not None:
+        all_visits = all_visits[:k]
+
     visit_mapping = {visit: (0 if visit == 'bl' else int(visit[1:])) for visit in pHCiAD["VISCODE2"].unique()}
 
     X = []
@@ -170,14 +179,19 @@ if imputed:
     time_missing = torch.tensor(time_missing, dtype=torch.float32)
     static_covariates = torch.tensor(static_covariates, dtype=torch.float32)
 
+    # print(X.shape)
+    # print(y.shape)
+    # print(is_missing.shape)
+    # print(time_missing.shape)
+
     # no NAs, no Infs
     X = torch.tensor(np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0), dtype=torch.float32)
-    print("                         IS NA         IS INF")
-    print("X                 ", torch.isnan(X).any(), torch.isinf(X).any())
-    print("y                 ", torch.isnan(y).any(), torch.isinf(y).any())
-    print("is_missing        ", torch.isnan(is_missing).any(), torch.isinf(is_missing).any())
-    print("time_missing      ", torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
-    print("static_covariates ", torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
+    # print("                         IS NA         IS INF")
+    # print("X                 ", torch.isnan(X).any(), torch.isinf(X).any())
+    # print("y                 ", torch.isnan(y).any(), torch.isinf(y).any())
+    # print("is_missing        ", torch.isnan(is_missing).any(), torch.isinf(is_missing).any())
+    # print("time_missing      ", torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
+    # print("static_covariates ", torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
 
     if not os.path.exists(f'processed/{cohort}'):
         os.makedirs(f'processed/{cohort}')
