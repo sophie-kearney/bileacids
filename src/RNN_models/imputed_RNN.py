@@ -23,17 +23,17 @@ from models import RNN, GRU, MaskedGRU
 ###
 
 # hyperparameters
-max_norm = 1.5
-l1_lambda = 9e-05
-hidden_size = 111
+max_norm = 0.5
+l1_lambda = 0.0001
+hidden_size = 128
 batch_size = 50
-num_epochs = 500
-lr = 7e-05
-test_trainval_ratio = 0.2
-train_val_ratio = 0.2
+num_epochs = 2500
+lr = .00004
+test_trainval_ratio = .2
+train_val_ratio = .2
 dropout = 0.7
 num_layers = 3
-patience = 80
+patience = 200
 early_stopping = True
 
 # program parameters
@@ -120,6 +120,7 @@ else:
     raise ValueError("Invalid model choice")
 # print(model)
 
+# print(X.shape)
 ###
 # TRAIN
 ###
@@ -198,8 +199,8 @@ for epoch in range(num_epochs):
     else:
         patience_counter += 1
 
-    # if early_stopping and (patience_counter >= patience or val_loss > train_loss):
-    if early_stopping and val_loss > train_loss:
+    if early_stopping and patience_counter >= patience:
+    # if early_stopping and val_loss > train_loss:
         # print(f'Early stopping at epoch {epoch + 1}')
         break
 
@@ -260,7 +261,7 @@ if eval:
     # print(f"aproc: {aproc:.4f}")
     # print(f"R^2: {r2:.4f}")
     # print("-------------------")
-
+    #
     print(f"{accuracy:.4f} {roc_auc:.4f} {aproc:.4f}")
 
     # plt.figure()
