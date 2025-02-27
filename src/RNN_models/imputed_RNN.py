@@ -23,22 +23,22 @@ from models import RNN, GRU, MaskedGRU
 ###
 
 # hyperparameters
-max_norm = 1.5
-l1_lambda = 9e-5
+max_norm = 0.5
+l1_lambda = 0.0001
 hidden_size = 128
 batch_size = 50
-num_epochs = 500
-lr = 7e-05
-test_trainval_ratio = 0.2
-train_val_ratio = 0.2
+num_epochs = 2500
+lr = .00004
+test_trainval_ratio = .2
+train_val_ratio = .2
 dropout = 0.7
-num_layers = 2
-patience = 75
+num_layers = 3
+patience = 150
 early_stopping = True
 
 # program parameters
-cohort = "pHCiAD"            # pMCIiAD pHCiAD
-model_choice = "MaskedGRU"   # GRU, simpleRNN, MaskedGRU
+cohort = "pMCIiAD"            # pMCIiAD pHCiAD
+model_choice = "simpleRNN"   # GRU, simpleRNN, MaskedGRU
 eval = True
 imputed = True
 output_size = 1
