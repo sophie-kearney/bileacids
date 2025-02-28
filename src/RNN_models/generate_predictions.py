@@ -21,7 +21,7 @@ batch_size = 50
 input_size = 111
 hidden_size = input_size
 num_layers = 3
-trained_model = "MaskedGRU_0.8215"
+trained_model = "seed32_MaskedGRU_0.8267"
 model_path = f'models/pMCIiAD/{trained_model}'
 
 ###
@@ -36,9 +36,9 @@ static_covariates = torch.load(f'processed/{cohort}/static_covariates.pt')
 
 # split into test:train:val
 (X_temp, X_test, y_temp, y_test, mask_temp, mask_test, time_missing_temp, time_missing_test, cov_temp, cov_test) = (
-        train_test_split(X, y, is_missing, time_missing, static_covariates, test_size=test_trainval_ratio))
+        train_test_split(X, y, is_missing, time_missing, static_covariates, test_size=test_trainval_ratio, random_state=32))
 (X_train, X_val, y_train, y_val, mask_train, mask_val, time_missing_train, time_missing_val, cov_train, cov_val) = (
-        train_test_split(X_temp, y_temp, mask_temp, time_missing_temp, cov_temp, test_size=train_val_ratio))
+        train_test_split(X_temp, y_temp, mask_temp, time_missing_temp, cov_temp, test_size=train_val_ratio, random_state=32))
 
 # create datasets
 train_dataset = TensorDataset(X_train, y_train, mask_train, time_missing_train, cov_train)
@@ -90,8 +90,6 @@ for rid, patient in master_data.groupby("RID"):
             first_ad_viscode2 = int(first_ad_row["VISCODE2"].replace("m","").replace("bl","0"))
             times[rid] = first_ad_viscode2
         else:
-            # last_row = patient.iloc[-1]
-            # last_viscode2 = int(last_row["VISCODE2"].replace("m","").replace("bl","0"))
             times[rid] = np.nan
 data["ADConversionTime"] = data["rid"].map(times)
 

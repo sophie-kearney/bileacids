@@ -28,17 +28,17 @@ l1_lambda = 0.0001
 hidden_size = 128
 batch_size = 50
 num_epochs = 2500
-lr = .00004
-test_trainval_ratio = .2
-train_val_ratio = .2
+lr = 5e-05
+test_trainval_ratio = 0.2
+train_val_ratio = 0.2
 dropout = 0.7
 num_layers = 3
-patience = 150
+patience = 65
 early_stopping = True
 
 # program parameters
 cohort = "pMCIiAD"            # pMCIiAD pHCiAD
-model_choice = "simpleRNN"   # GRU, simpleRNN, MaskedGRU
+model_choice = "MaskedGRU"   # GRU, simpleRNN, MaskedGRU
 eval = True
 imputed = True
 output_size = 1
@@ -68,8 +68,8 @@ else:
     X = torch.load(f'processed/{cohort}/not_imputed/X.pt', weights_only=False)
     y = torch.load(f'processed/{cohort}/not_imputed/y.pt')
 
-    (X_temp, X_test, y_temp, y_test) = train_test_split(X, y, test_size=test_trainval_ratio)
-    (X_train, X_val, y_train, y_val) = train_test_split(X_temp, y_temp, test_size=train_val_ratio)
+    (X_temp, X_test, y_temp, y_test) = train_test_split(X, y, test_size=test_trainval_ratio, random_state=32)
+    (X_train, X_val, y_train, y_val) = train_test_split(X_temp, y_temp, test_size=train_val_ratio, random_state=32)
 
     train_dataset = TensorDataset(X_train, y_train)
     val_dataset = TensorDataset(X_val, y_val)
@@ -267,19 +267,19 @@ if eval:
     plt.legend(loc='lower right')
     plt.show()
 
-    if roc_auc > get_saved_auc(cohort, model_choice, imputed): # TODO - fix this function to actually get highest ROC
-        file_path = f"models/{cohort}/{model_choice}_{roc_auc:.4f}"
-        if not imputed:
-            file_path += "_noImp"
-        torch.save(model.state_dict(), f"{file_path}")
+    # if roc_auc > get_saved_auc(cohort, model_choice, imputed):
+    file_path = f"models/{cohort}/seed32_{model_choice}_{roc_auc:.4f}"
+    if not imputed:
+        file_path += "_noImp"
+    torch.save(model.state_dict(), f"{file_path}")
 
-        hyperparamters = {"max_norm": max_norm, "l1_lambda": l1_lambda, "hidden_size": hidden_size,
-                          "batch_size": batch_size, "num_epochs": num_epochs, "lr": lr,
-                          "test_trainval_ratio": test_trainval_ratio, "train_val_ratio": train_val_ratio,
-                          "dropout": dropout, "num_layers": num_layers, "patience": patience,
-                          "early_stopping": early_stopping, "cohort": cohort, "model_choice": model_choice,
-                          "imputed": imputed, "accuracy": accuracy, "roc_auc": roc_auc, "aproc": aproc, "r2": r2}
+    hyperparamters = {"max_norm": max_norm, "l1_lambda": l1_lambda, "hidden_size": hidden_size,
+                      "batch_size": batch_size, "num_epochs": num_epochs, "lr": lr,
+                      "test_trainval_ratio": test_trainval_ratio, "train_val_ratio": train_val_ratio,
+                      "dropout": dropout, "num_layers": num_layers, "patience": patience,
+                      "early_stopping": early_stopping, "cohort": cohort, "model_choice": model_choice,
+                      "imputed": imputed, "accuracy": accuracy, "roc_auc": roc_auc, "aproc": aproc, "r2": r2}
 
-        with open(f"{file_path}_hyperparameters.txt", "w") as f:
-            for key, value in hyperparamters.items():
-                f.write(f"{key} = {value}\n")
+    with open(f"{file_path}_hyperparameters.txt", "w") as f:
+        for key, value in hyperparamters.items():
+            f.write(f"{key} = {value}\n")

@@ -12,7 +12,7 @@ import sys, os
 ###
 
 num_mets = 111
-cohort = "pHCiAD" # pHCiAD, pMCIiAD
+cohort = "pMCIiAD" # pHCiAD, pMCIiAD
 imputed = True
 
 ###
