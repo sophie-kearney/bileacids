@@ -13,12 +13,16 @@ import sys, os
 
 num_mets = 111
 # cohort = "pMCIiAD" # pHCiAD, pMCIiAD
-cohort = os.getenv('COHORT', 'pMCIiAD')
-imputed = os.getenv('IMPUTED', 'True').lower() in ('true', '1', 't')
-k_env = os.getenv('K')
-k = int(k_env) if k_env else None
+# cohort = os.getenv('COHORT', 'pMCIiAD')
+# imputed = os.getenv('IMPUTED', 'True').lower() in ('true', '1', 't')
+# k_env = os.getenv('K')
+# k = int(k_env) if k_env else None
 
-print(k, imputed, cohort)
+# print(k, imputed, cohort)
+
+cohort = "pMCIiAD"
+imputed = True
+k = 13
 
 ###
 # PARSE DATA
@@ -74,9 +78,11 @@ else:
 # IMPUTATION
 ###
 
+pHCiAD.to_csv(f"processed/{cohort}.csv", index=False)
+
 if imputed:
     all_visits = sorted(pHCiAD["VISCODE2"].unique(), key=lambda x: (x != 'bl', int(x[1:]) if x[1:].isdigit() else float('inf')))
-
+    print(all_visits)
     if k is not None:
         all_visits = all_visits[:k]
 
@@ -179,10 +185,10 @@ if imputed:
     time_missing = torch.tensor(time_missing, dtype=torch.float32)
     static_covariates = torch.tensor(static_covariates, dtype=torch.float32)
 
-    # print(X.shape)
-    # print(y.shape)
-    # print(is_missing.shape)
-    # print(time_missing.shape)
+    print(X.shape)
+    print(y.shape)
+    print(is_missing.shape)
+    print(time_missing.shape)
 
     # no NAs, no Infs
     X = torch.tensor(np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0), dtype=torch.float32)

@@ -28,24 +28,25 @@ l1_lambda = 0.0001
 hidden_size = 128
 batch_size = 50
 num_epochs = 2500
-lr = .00004
+lr = .0002
 test_trainval_ratio = .2
 train_val_ratio = .2
 dropout = 0.7
 num_layers = 3
-patience = 200
+patience = 40
 early_stopping = True
 
 # program parameters
-# cohort = "pMCIiAD"            # pMCIiAD pHCiAD
-# model_choice = "simpleRNN"   # GRU, simpleRNN, MaskedGRU
+cohort = "pMCIiAD"            # pMCIiAD pHCiAD
+model_choice = "simpleRNN"   # GRU, simpleRNN, MaskedGRU
 eval = True
-# imputed = True
+imputed = True
 output_size = 1
+random_state = 32
 
-cohort = os.getenv('COHORT', 'pMCIiAD')
-model_choice = os.getenv('MODEL', 'simpleRNN')
-imputed = os.getenv('IMPUTED','True').lower() in ('true', '1', 't')
+# cohort = os.getenv('COHORT', 'pMCIiAD')
+# model_choice = os.getenv('MODEL', 'simpleRNN')
+# imputed = os.getenv('IMPUTED','True').lower() in ('true', '1', 't')
 
 ###
 # DATA PROCESSING
@@ -58,10 +59,10 @@ if imputed:
     time_missing = torch.load(f'processed/{cohort}/time_missing.pt')
 
     (X_temp, X_test, y_temp, y_test, mask_temp, mask_test, time_missing_temp, time_missing_test) = (
-        train_test_split(X, y, is_missing, time_missing, test_size=test_trainval_ratio))
+        train_test_split(X, y, is_missing, time_missing, test_size=test_trainval_ratio, random_state=32))
 
     (X_train, X_val, y_train, y_val, mask_train, mask_val, time_missing_train, time_missing_val) = (
-        train_test_split(X_temp, y_temp, mask_temp, time_missing_temp, test_size=train_val_ratio))
+        train_test_split(X_temp, y_temp, mask_temp, time_missing_temp, test_size=train_val_ratio, random_state=32))
 
     # create datasets
     train_dataset = TensorDataset(X_train, y_train, mask_train, time_missing_train)
@@ -190,8 +191,8 @@ for epoch in range(num_epochs):
     if train_loss > 4 or val_loss > 4:
         raise ValueError("Loss too high. Start over")
 
-    # if (epoch + 1) % 10 == 0:
-    #     print(f'Epoch [{epoch + 1}/{num_epochs}], Test Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}')
+    if (epoch + 1) % 10 == 0:
+        print(f'Epoch [{epoch + 1}/{num_epochs}], Test Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}')
 
     if val_loss < best_val_loss:
         best_val_loss = val_loss
@@ -204,14 +205,14 @@ for epoch in range(num_epochs):
         # print(f'Early stopping at epoch {epoch + 1}')
         break
 
-# plt.figure()
-# plt.plot(range(len(losses)), losses, label='Training Loss')
-# plt.plot(range(len(losses)), val_losses, label='Validation Loss')
-# plt.xlabel('Epochs')
-# plt.ylabel('Loss')
-# plt.title('Training and Validation Loss over Epochs')
-# plt.legend()
-# plt.show()
+plt.figure()
+plt.plot(range(len(losses)), losses, label='Training Loss')
+plt.plot(range(len(losses)), val_losses, label='Validation Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.title('Training and Validation Loss over Epochs')
+plt.legend()
+plt.show()
 
 ###
 # TEST MODEL
@@ -260,9 +261,9 @@ if eval:
     # print(f"roc: {roc_auc:.4f}")
     # print(f"aproc: {aproc:.4f}")
     # print(f"R^2: {r2:.4f}")
-    # print("-------------------")
-    #
-    print(f"{accuracy:.4f} {roc_auc:.4f} {aproc:.4f}")
+    print("-------------------")
+    print(f"{cohort} {model_choice} {'imputed' if imputed else 'not imputed'} {X.shape[1]}")
+    print(f"{accuracy:.4f},{roc_auc:.4f},{aproc:.4f}")
 
     # plt.figure()
     # plt.plot(fpr, tpr, color='navy', lw=1, label='ROC curve (area = %0.2f)' % roc_auc)
