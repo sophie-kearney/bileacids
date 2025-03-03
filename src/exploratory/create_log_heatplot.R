@@ -16,7 +16,7 @@ library(gridExtra)
 # data$ABETA <- as.numeric(data$ABETA)
 
 # data <- read.csv("/Users/sophiekk/PycharmProjects/bileacids/processed/master_data_minmax.csv")
-data <- read.csv("/Users/sophiekk/PycharmProjects/bileacids/processed/master_data_log10.csv")
+data <- read.csv("/Users/sophiekk/PycharmProjects/bileacids/processed/master_data.csv")
 # data <- read.csv("/Users/sophiekk/PycharmProjects/bileacids/processed/master_data_standardscaler.csv")
 
 # set constants
