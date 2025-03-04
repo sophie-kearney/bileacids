@@ -8,7 +8,7 @@ import torch
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import sys, os
+import sys, os, shap
 from sklearn.model_selection import train_test_split
 from sklearn import linear_model
 from sklearn.metrics import accuracy_score, roc_auc_score, auc, precision_recall_curve, r2_score, roc_curve, confusion_matrix
@@ -27,10 +27,10 @@ trained_model = "seed32_MaskedGRU_0.8267"
 ###
 
 data = pd.read_csv(f"processed/{cohort}/{trained_model}_predictions.csv")
-data = data[['AGE', 'PTGENDER', 'APOE_e2e4', 'ADRiskScore', 'AD']]
+data = data[['AGE', 'PTGENDER', 'APOE_e2e4', 'ADRiskScore', 'AD', "LongCovRiskScore"]]
 data.dropna(inplace=True)
 
-X = data[["AGE","PTGENDER","APOE_e2e4","ADRiskScore"]]
+X = data[["AGE","PTGENDER","APOE_e2e4","ADRiskScore", "LongCovRiskScore"]]
 y = data["AD"]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -63,7 +63,6 @@ plt.ylabel("True Positive Rate")
 plt.title(f"LR AUROC using RNN Embeddings and Covariates")
 plt.legend(loc="lower right")
 
-# plt.savefig(f'/figures/LR_ROC_{cohort}_{auroc:.2f}.png')
 plt.show()
 
 cm = confusion_matrix(y_test, pred_labels)
@@ -73,3 +72,23 @@ plt.xlabel('Predicted')
 plt.ylabel('Actual')
 plt.title('Confusion Matrix')
 plt.show()
+
+feature_importance = pd.DataFrame({
+    'Feature': X.columns,
+    'Coefficient': logr.coef_[0]
+})
+feature_importance['Importance'] = feature_importance['Coefficient'].abs()
+feature_importance = feature_importance.sort_values(by='Importance', ascending=False)
+
+print("\n--- FEATURE IMPORTANCE ---")
+print(feature_importance)
+
+plt.figure(figsize=(10, 6))
+sns.barplot(x='Importance', y='Feature', data=feature_importance)
+plt.title('Feature Importance')
+plt.show()
+
+explainer = shap.Explainer(logr, X_train)
+shap_values = explainer(X_test)
+
+shap.summary_plot(shap_values, X_test, feature_names=X.columns)

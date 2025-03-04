@@ -27,6 +27,7 @@ end_met = data.columns.get_loc("BUDCA") + 1
 begin_BA = data.columns.get_loc("CA")
 begin_BA_ratio = data.columns.get_loc("CA_CDCA")
 end_BA_ratio = data.columns.get_loc("GLCA_CDCA") + 1
+longitudinal_cov_columns = ["fast", "BMI", "trig", "chol","hdl" ]
 
 # log 10 scale
 data.iloc[:, begin_met:end_met] = np.log10(data.iloc[:, begin_met:end_met].replace(0, np.nan))
@@ -79,12 +80,14 @@ if imputed:
     time_missing = []
     rids = []
     static_covariates = []
+    longitudinal_covariates = []
 
     for rid, patient in pHCiAD.groupby("RID"):
         curr_seq = []    # current sequence of visits for one patient
         no_bl = False    # flag for if patient has missing visits before any are filled
         missingness = [] # length of attributes, 1 if filled, 0 if missing
         time_miss = []   # length of attributes, 0 if no time since last and delta time if there is
+        curr_long = []   # longitudinal covariates for the current patient
 
         for visit in all_visits:
             # patient has data for that visit
@@ -92,6 +95,7 @@ if imputed:
                 row = patient[patient["VISCODE2"] == visit]
                 met_data = [float(x) for x in row.iloc[0, begin_met:end_met].values.tolist()] + \
                            [float(x) for x in row.iloc[0, begin_BA_ratio:end_BA_ratio].values.tolist()]
+                long_cov = row[longitudinal_cov_columns].values.tolist()[0]
 
                 # if there are missing values, forward fill and track in missingness
                 curr_miss = []
@@ -125,6 +129,7 @@ if imputed:
                 missingness.append(curr_miss)
                 curr_seq.append(met_data)
                 time_miss.append(curr_time)
+                curr_long.append(long_cov)
 
             # the patient doesn't have data for that visit
             else:
@@ -142,6 +147,7 @@ if imputed:
                     # forward fill imputation from last curr_seq
                     curr_seq.append(curr_seq[-1])
                     missingness.append([0] * len(curr_seq[-1])) # we have to fill every value so it is all 0
+                    curr_long.append(curr_long[-1])
 
                 else:
                     # patient has missing visits before any are filled, does not have baseline data
@@ -157,6 +163,7 @@ if imputed:
 
             cov = [rid, patient.iloc[0]["AGE"], patient.iloc[0]["PTGENDER"], patient.iloc[0]["APOE_e2e4"]]
             static_covariates.append(cov) # TODO - there are NA values in the covariates
+            longitudinal_covariates.append(curr_long)
 
             # add the classification to y
             if 4 in patient["DX_VALS"].values:
@@ -169,6 +176,7 @@ if imputed:
     is_missing = torch.tensor(is_missing, dtype=torch.float32)
     time_missing = torch.tensor(time_missing, dtype=torch.float32)
     static_covariates = torch.tensor(static_covariates, dtype=torch.float32)
+    longitudinal_covariates = torch.tensor(longitudinal_covariates, dtype=torch.float32)
 
     # no NAs, no Infs
     X = torch.tensor(np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0), dtype=torch.float32)
@@ -177,7 +185,8 @@ if imputed:
     print("y                 ", torch.isnan(y).any(), torch.isinf(y).any())
     print("is_missing        ", torch.isnan(is_missing).any(), torch.isinf(is_missing).any())
     print("time_missing      ", torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
-    print("static_covariates ", torch.isnan(time_missing).any(), torch.isinf(time_missing).any())
+    print("static_covariates ", torch.isnan(static_covariates).any(), torch.isinf(static_covariates).any())
+    print("long_covariates   ", torch.isnan(longitudinal_covariates).any(), torch.isinf(longitudinal_covariates).any())
 
     if not os.path.exists(f'processed/{cohort}'):
         os.makedirs(f'processed/{cohort}')
@@ -187,17 +196,20 @@ if imputed:
     torch.save(is_missing, f'processed/{cohort}/is_missing.pt')
     torch.save(time_missing, f'processed/{cohort}/time_missing.pt')
     torch.save(static_covariates, f'processed/{cohort}/static_covariates.pt')
+    torch.save(longitudinal_covariates, f'processed/{cohort}/longitudinal_covariates.pt')
 
 else:
     X = []
     y = []
     rids = []
     static_covariates = []
+    longitudinal_covariates = []
 
     for rid, patient in pHCiAD.groupby("RID"):
         met_data = np.concatenate([patient.iloc[:, begin_met:end_met].fillna(0).values,
                                    patient.iloc[:, begin_BA_ratio:end_BA_ratio].fillna(0).values], axis=1)
         cov = [patient.iloc[0]["AGE"], patient.iloc[0]["PTGENDER"], patient.iloc[0]["APOE_e2e4"]]
+        long_cov = patient[longitudinal_cov_columns].values.tolist()
 
         if 4 in patient["DX_VALS"].values:
             y.append(1)
@@ -205,6 +217,7 @@ else:
             y.append(0)
 
         static_covariates.append(cov)
+        longitudinal_covariates.append(long_cov)
         X.append(met_data)
         rids.append(rid)
 
@@ -215,9 +228,13 @@ else:
     static_covariates = torch.tensor(static_covariates, dtype=torch.float32)
     rids = torch.tensor(rids, dtype=torch.float32)
 
+    longitudinal_covariates = torch.nn.utils.rnn.pad_sequence([torch.tensor(x, dtype=torch.float32) for x in longitudinal_covariates], batch_first=True)
+    # longitudinal_covariates = torch.tensor(longitudinal_covariates, dtype=torch.float32)
+
     if not os.path.exists(f'processed/{cohort}/not_imputed'):
         os.makedirs(f'processed/{cohort}/not_imputed')
 
     torch.save(X, f'processed/{cohort}/not_imputed/X.pt')
     torch.save(y, f'processed/{cohort}/not_imputed/y.pt')
     torch.save(static_covariates, f'processed/{cohort}/not_imputed/static_covariates.pt')
+    torch.save(longitudinal_covariates, f'processed/{cohort}/not_imputed/longitudinal_covariates.pt')
