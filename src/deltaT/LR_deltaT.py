@@ -13,7 +13,7 @@ from sklearn.metrics import accuracy_score, roc_auc_score, auc, precision_recall
 num_mets = 111
 cohort = "pMCIiAD" # pHCiAD, pMCIiAD
 imputed = True
-delta_t = 24
+delta_t = -6
 
 ###
 # PARSE DATA
@@ -49,7 +49,6 @@ iAD = data[data["RID"].isin(rids)]
 
 pMCI = data.groupby("RID").filter(lambda x: x["DX_VALS"].isin([2, 3]).all())
 pMCIiAD = pd.concat([pMCI, iAD], ignore_index=True)
-pMCIiAD.to_csv("processed/pMCIiAD.csv", index=False)
 
 for rid, patient in pMCIiAD.groupby("RID"):
     dxs = patient["DX_VALS"].values
@@ -74,49 +73,49 @@ for rid, patient in pMCIiAD.groupby("RID"):
 
 pMCIiAD.to_csv("processed/pMCIiAD.csv", index=False)
 
-sixmoAD = pMCIiAD[pMCIiAD["DIFF"] == delta_t]
-blMCI = pMCI[pMCI["VISCODE2"] == "bl"]
-
-sixmoAD2 = sixmoAD.assign(y=1)
-blMCI2 = blMCI.assign(y=0)
-both = pd.concat([sixmoAD2, blMCI2], ignore_index=True)
-both.to_csv("processed/blMCI-6dt.csv", index=False)
-
-X_sixmoAD = pd.DataFrame(np.concatenate([sixmoAD.iloc[:, begin_met:end_met].values,
-                            sixmoAD.iloc[:, begin_BA_ratio:end_BA_ratio].values,
-                            sixmoAD[['AGE', 'PTGENDER', 'BMI', 'fast', 'APOE_e2e4']].values], axis=1))
-
-X_blMCI = pd.DataFrame(np.concatenate([blMCI.iloc[:, begin_met:end_met].values,
-                          blMCI.iloc[:, begin_BA_ratio:end_BA_ratio].values,
-                          blMCI[['AGE', 'PTGENDER', 'BMI', 'fast', 'APOE_e2e4']].values], axis=1))
-X_sixmoAD = X_sixmoAD.dropna()
-X_blMCI = X_blMCI.dropna()
-X = pd.concat([X_sixmoAD, X_blMCI], axis=0)
-y = np.concatenate(([1] * len(X_sixmoAD), [0] * len(X_blMCI)))
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-logr = linear_model.LogisticRegression(max_iter=5000)
-logr.fit(X_train,y_train)
-
-pred_probs = logr.predict_proba(X_test)[:, 1]
-auroc = roc_auc_score(y_test, pred_probs)
-# print(auroc)
-
-fpr, tpr, _ = roc_curve(y_test, pred_probs)
-pred_labels = (pred_probs > 0.5).astype(int)
-
-accuracy = accuracy_score(y_test, pred_labels)
-roc_auc = auc(fpr, tpr)
-precision, recall, _ = precision_recall_curve(y_test, pred_labels)
-aproc = auc(recall, precision)
-r2 = r2_score(y_test, pred_labels)
-
-print("\n--- PERFORMANCE ---")
-print(X_sixmoAD.shape[0], "cases")
-print(X_blMCI.shape[0], "controls")
-print(f"{cohort} LR {delta_t}")
-print(f"accuracy: {accuracy:.4f}")
-print(f"roc: {roc_auc:.4f}")
-print(f"auprc: {aproc:.4f}")
-print("-------------------")
+# sixmoAD = pMCIiAD[pMCIiAD["DIFF"] == delta_t]
+# blMCI = pMCI[pMCI["VISCODE2"] == "bl"]
+#
+# sixmoAD2 = sixmoAD.assign(y=1)
+# blMCI2 = blMCI.assign(y=0)
+# both = pd.concat([sixmoAD2, blMCI2], ignore_index=True)
+# both.to_csv("processed/blMCI-6dt.csv", index=False)
+#
+# X_sixmoAD = pd.DataFrame(np.concatenate([sixmoAD.iloc[:, begin_met:end_met].values,
+#                             sixmoAD.iloc[:, begin_BA_ratio:end_BA_ratio].values,
+#                             sixmoAD[['AGE', 'PTGENDER', 'BMI', 'fast', 'APOE_e2e4']].values], axis=1))
+#
+# X_blMCI = pd.DataFrame(np.concatenate([blMCI.iloc[:, begin_met:end_met].values,
+#                           blMCI.iloc[:, begin_BA_ratio:end_BA_ratio].values,
+#                           blMCI[['AGE', 'PTGENDER', 'BMI', 'fast', 'APOE_e2e4']].values], axis=1))
+# X_sixmoAD = X_sixmoAD.dropna()
+# X_blMCI = X_blMCI.dropna()
+# X = pd.concat([X_sixmoAD, X_blMCI], axis=0)
+# y = np.concatenate(([1] * len(X_sixmoAD), [0] * len(X_blMCI)))
+#
+# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+#
+# logr = linear_model.LogisticRegression(max_iter=5000)
+# logr.fit(X_train,y_train)
+#
+# pred_probs = logr.predict_proba(X_test)[:, 1]
+# auroc = roc_auc_score(y_test, pred_probs)
+# # print(auroc)
+#
+# fpr, tpr, _ = roc_curve(y_test, pred_probs)
+# pred_labels = (pred_probs > 0.5).astype(int)
+#
+# accuracy = accuracy_score(y_test, pred_labels)
+# roc_auc = auc(fpr, tpr)
+# precision, recall, _ = precision_recall_curve(y_test, pred_labels)
+# aproc = auc(recall, precision)
+# r2 = r2_score(y_test, pred_labels)
+#
+# print("\n--- PERFORMANCE ---")
+# print(X_sixmoAD.shape[0], "cases")
+# print(X_blMCI.shape[0], "controls")
+# print(f"{cohort} LR {delta_t}")
+# print(f"accuracy: {accuracy:.4f}")
+# print(f"roc: {roc_auc:.4f}")
+# print(f"auprc: {aproc:.4f}")
+# print("-------------------")

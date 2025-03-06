@@ -127,5 +127,20 @@ with torch.no_grad():
 all_probs = np.concatenate(all_probs)
 data["LongCovRiskScore"] = all_probs
 
+###
+# GET PRS
+###
+
+all_data = pd.read_csv("/Users/sophiekk/PycharmProjects/bileacids/raw/gene_level_directed_merge_pupdated_apoe_prsnorm.csv")
+all_data = all_data[["RID","SCORE"]].rename(columns={"SCORE": "PRS"})
+data = data.merge(all_data, left_on="rid", right_on="RID", how="left").drop(columns=["RID"])
+threshold = data["PRS"].median()
+data["PRSRiskGroup"] = data["PRS"].apply(lambda x: "High" if x >= threshold else "Low")
+
+###
+# SAVE PREDICTIONS
+###
+
 print(data)
 data.to_csv(f"processed/{cohort}/{trained_model}_predictions.csv", index=False)
+print("Saved to: ", f"processed/{cohort}/{trained_model}_predictions.csv")

@@ -27,10 +27,10 @@ trained_model = "seed32_MaskedGRU_0.8267"
 ###
 
 data = pd.read_csv(f"processed/{cohort}/{trained_model}_predictions.csv")
-data = data[['AGE', 'PTGENDER', 'APOE_e2e4', 'ADRiskScore', 'AD', "LongCovRiskScore"]]
+data = data[["AGE", "PTGENDER", "APOE_e2e4", "ADRiskScore", "AD", "LongCovRiskScore", "PRS"]]
 data.dropna(inplace=True)
 
-X = data[["AGE","PTGENDER","APOE_e2e4","ADRiskScore", "LongCovRiskScore"]]
+X = data[["AGE","PTGENDER","APOE_e2e4","ADRiskScore", "LongCovRiskScore", "PRS"]]
 y = data["AD"]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)

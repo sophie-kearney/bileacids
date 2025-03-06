@@ -2,54 +2,51 @@
 # IMPORTS
 ###
 
-import numpy as np
 import pandas as pd
+import numpy as np
 import torch
-import sys, os
-from sklearn.metrics import accuracy_score, roc_curve, auc, precision_recall_curve, r2_score
-import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, TensorDataset
-from models import RNN
 import torch.nn as nn
 import torch.optim as optim
+from pandas import read_csv
+from pandas.core.common import random_state
+from sklearn.metrics import accuracy_score, roc_curve, auc, precision_recall_curve, r2_score
+import matplotlib.pyplot as plt
+import os, re, sys
+import pandas as pd
+from sklearn.model_selection import train_test_split
+import torch.nn.functional as F
+from torch.utils.data import DataLoader, TensorDataset
+from src.RNN_models.models import GRU
 
-###
+
+##
 # DEFINE CONSTANTS
 ###
 
-cohort = "pMCIiAD" # pHCiAD, pMCIiAD
-imputed = True
-longitudinal_cov_columns = ["fast", "BMI", "trig", "chol","hdl"]
-
 # hyperparameters
-max_norm = 0.5
-l1_lambda = 0.0001
-hidden_size = 128
+max_norm = 0.1
+l1_lambda = 0.001
+hidden_size = 32
 batch_size = 50
 num_epochs = 2500
-lr = .001
+lr = .0001
 test_trainval_ratio = 0.2
 train_val_ratio = 0.2
-dropout = 0.7
-num_layers = 3
-patience = 65
+dropout = 0.5
+num_layers = 6
+patience = 60
 early_stopping = True
 
-# program parameters
-model_choice = "simpleRNN"   # GRU, simpleRNN, MaskedGRU
-eval = True
+cohort = "pMCIiAD"
+model_choice = "GRU"
 output_size = 1
-imputed = False
-trained_model = "seed32_MaskedGRU_0.8267_predictions.csv"
 
 ###
-# PARSE DATA
+# DATA PROCESSING
 ###
 
-X = torch.load(f'processed/{cohort}/longitudinal_covariates.pt')
-y =  torch.load(f'processed/{cohort}/y.pt')
-
+X = torch.load(f'processed/{cohort}/deltaT/X.pt', weights_only=False)
+y = torch.load(f'processed/{cohort}/deltaT/y.pt')
 (X_temp, X_test, y_temp, y_test) = train_test_split(X, y, test_size=test_trainval_ratio, random_state=32)
 (X_train, X_val, y_train, y_val) = train_test_split(X_temp, y_temp, test_size=train_val_ratio, random_state=32)
 
@@ -66,13 +63,16 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 input_size = X.shape[2]  # num features per visit
 
 ###
-# TRAIN MODEL
+# DEFINE MODEL
 ###
 
-model = RNN(input_size, hidden_size, 1, num_layers=num_layers, dropout=dropout)
-
+model = GRU(input_size, hidden_size, 1)
 criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
+
+###
+# TRAIN
+###
 
 losses = []
 val_losses = []
@@ -134,6 +134,10 @@ plt.title('Training and Validation Loss over Epochs')
 plt.legend()
 plt.show()
 
+###
+# TEST MODEL
+###
+
 model.eval()
 
 y_true = []
@@ -164,7 +168,7 @@ aproc = auc(recall, precision)
 r2 = r2_score(y_true, all_probs)
 
 print("\n--- PERFORMANCE ---")
-print(f"{cohort} {model_choice} {'imputed' if imputed else 'not imputed'}")
+print(f"{cohort} {model_choice}")
 print(f"accuracy: {accuracy:.4f}")
 print(f"roc: {roc_auc:.4f}")
 print(f"aproc: {aproc:.4f}")
@@ -181,10 +185,3 @@ plt.ylabel('True Positive Rate')
 plt.title('Receiver Operating Characteristic')
 plt.legend(loc='lower right')
 plt.show()
-
-###
-# SAVE MODEL
-###
-
-file_path = f"models/{cohort}/longCov_seed32_{model_choice}_{roc_auc:.4f}"
-torch.save(model.state_dict(), f"{file_path}")
