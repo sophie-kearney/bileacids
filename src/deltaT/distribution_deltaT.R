@@ -5,13 +5,6 @@ library(gridExtra)
 pMCIiAD <- read.csv("/Users/sophiekk/PycharmProjects/bileacids/processed/pMCIiAD.csv")
 
 ggplot(pMCIiAD, aes(x=DIFF)) +
-  geom_histogram()+
-  theme_bw() +
-  labs(x="Distribution of \u0394t from Visit of AD Incidence",
-       y="Count (months)")+
-  scale_x_continuous(breaks = unique(pMCIiAD$DIFF))
-
-ggplot(pMCIiAD, aes(x=DIFF)) +
   geom_bar(fill="lightblue") +
   theme_bw() +
   labs(x="Distribution of \u0394t from Visit of AD Incidence (months)",
@@ -57,6 +50,8 @@ main_plot <- ggplot(metrics_long, aes(x = Case, y = Value, color = Model, fill =
   facet_wrap(~ Metric) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
   labs(y="") +
+  # scale_y_continuous(limits = c(0,1.0)) +
+  coord_cartesian(ylim = c(0,1)) +
   theme(axis.title.x = element_blank(), legend.position = "top",
         axis.text.x = element_blank())
 hist_plot <- ggplot(diffs_long, aes(x=DIFF)) +
@@ -67,7 +62,7 @@ hist_plot <- ggplot(diffs_long, aes(x=DIFF)) +
   scale_x_continuous(breaks = unique(diffs$DIFF))+
   facet_wrap(~Metric)  +
   theme(strip.text = element_blank(),
-        axis.text.y = element_text(color = "white"),
-        axis.ticks.y = element_blank(),
+        # axis.text.y = element_text(color = "white"),
+        # axis.ticks.y = element_blank(),
         panel.grid = element_blank())
 grid.arrange(main_plot, hist_plot, ncol = 1, heights = c(2, .75))

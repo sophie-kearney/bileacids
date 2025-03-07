@@ -13,7 +13,7 @@ from sklearn.metrics import accuracy_score, roc_auc_score, auc, precision_recall
 num_mets = 111
 cohort = "pMCIiAD" # pHCiAD, pMCIiAD
 imputed = True
-delta_t = [-6, 0]
+delta_t = [-12, -6, 0]
 
 ###
 # LOAD DATA
@@ -39,7 +39,7 @@ for rid, patient in pMCIiAD.groupby("RID"):
     diffs = patient["DIFF"].values
     if all(dt in diffs for dt in delta_t):
         valid_rids_iAD.append(rid)
-    elif np.any(np.isnan(diffs)) and len(diffs) > 1:
+    elif np.any(np.isnan(diffs)) and len(diffs) > (len(delta_t) - 1):
         valid_rids_pMCI.append(rid)
 
 deltaT_iAD = pMCIiAD[pMCIiAD["RID"].isin(valid_rids_iAD)]
@@ -61,6 +61,7 @@ rids = []
 static_covariates = []
 longitudinal_covariates = []
 
+# get AD patients
 for rid, patient in deltaT_iAD.groupby("RID"):
     met_data = np.concatenate([patient.iloc[:, begin_met:end_met].fillna(0).values,
                                patient.iloc[:, begin_BA_ratio:end_BA_ratio].fillna(0).values], axis=1)
@@ -74,11 +75,12 @@ for rid, patient in deltaT_iAD.groupby("RID"):
     X.append(met_data)
     rids.append(rid)
 
+# get pMCI patients
 for rid, patient in deltaT_pMCI.groupby("RID"):
-    met_data = np.concatenate([patient.iloc[:2, begin_met:end_met].fillna(0).values,
-                               patient.iloc[:2, begin_BA_ratio:end_BA_ratio].fillna(0).values], axis=1)
+    met_data = np.concatenate([patient.iloc[:len(delta_t), begin_met:end_met].fillna(0).values,
+                               patient.iloc[:len(delta_t), begin_BA_ratio:end_BA_ratio].fillna(0).values], axis=1)
     cov = [patient.iloc[0]["AGE"], patient.iloc[0]["PTGENDER"], patient.iloc[0]["APOE_e2e4"]]
-    long_cov = patient[longitudinal_cov_columns].values.tolist()[:2]
+    long_cov = patient[longitudinal_cov_columns].values.tolist()[:len(delta_t)]
 
     y.append(0)
 

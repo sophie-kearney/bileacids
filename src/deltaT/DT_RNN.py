@@ -16,7 +16,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
-from src.RNN_models.models import GRU
+from src.RNN_models.models import RNN
 
 
 ##
@@ -24,21 +24,21 @@ from src.RNN_models.models import GRU
 ###
 
 # hyperparameters
-max_norm = 0.1
-l1_lambda = 0.001
-hidden_size = 32
-batch_size = 50
+max_norm = .8
+l1_lambda = 0.0003
+hidden_size = 128
+batch_size = 41
 num_epochs = 2500
-lr = .0001
-test_trainval_ratio = 0.2
-train_val_ratio = 0.2
-dropout = 0.5
-num_layers = 6
-patience = 60
+lr = .001
+test_trainval_ratio = .2
+train_val_ratio = .2
+dropout = 0.7
+num_layers = 3
+patience = 50
 early_stopping = True
 
 cohort = "pMCIiAD"
-model_choice = "GRU"
+model_choice = "simpleRNN"
 output_size = 1
 
 ###
@@ -61,12 +61,13 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # data structure
 input_size = X.shape[2]  # num features per visit
+print(X.shape)
 
 ###
 # DEFINE MODEL
 ###
 
-model = GRU(input_size, hidden_size, 1)
+model = RNN(input_size, hidden_size, 1, num_layers=num_layers, dropout=dropout)
 criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
@@ -167,13 +168,15 @@ precision, recall, _ = precision_recall_curve(y_true, all_probs)
 aproc = auc(recall, precision)
 r2 = r2_score(y_true, all_probs)
 
-print("\n--- PERFORMANCE ---")
-print(f"{cohort} {model_choice}")
-print(f"accuracy: {accuracy:.4f}")
-print(f"roc: {roc_auc:.4f}")
-print(f"aproc: {aproc:.4f}")
-print(f"R^2: {r2:.4f}")
-print("-------------------")
+# print("\n--- PERFORMANCE ---")
+# print(f"{cohort} {model_choice}")
+# print(f"accuracy: {accuracy:.4f}")
+# print(f"roc: {roc_auc:.4f}")
+# print(f"aproc: {aproc:.4f}")
+# print(f"R^2: {r2:.4f}")
+# print("-------------------")
+
+print(f"{accuracy:.4f}", ",", f"{roc_auc:.4f}", ",", f"{aproc:.4f}")
 
 plt.figure()
 plt.plot(fpr, tpr, color='navy', lw=1, label='ROC curve (area = %0.2f)' % roc_auc)

@@ -131,11 +131,22 @@ data["LongCovRiskScore"] = all_probs
 # GET PRS
 ###
 
+# get other columns that are needed from the megafile
 all_data = pd.read_csv("/Users/sophiekk/PycharmProjects/bileacids/raw/gene_level_directed_merge_pupdated_apoe_prsnorm.csv")
-all_data = all_data[["RID","SCORE"]].rename(columns={"SCORE": "PRS"})
+all_data = all_data[["RID","SCORE", "APOE"]].rename(columns={"SCORE": "PRS"})
+
+# merge into our predictions dataframe
 data = data.merge(all_data, left_on="rid", right_on="RID", how="left").drop(columns=["RID"])
-threshold = data["PRS"].median()
-data["PRSRiskGroup"] = data["PRS"].apply(lambda x: "High" if x >= threshold else "Low")
+
+# stratify by PRS using 50th percentile
+# threshold = data["PRS"].median()
+# data["PRSRiskGroup"] = data["PRS"].apply(lambda x: "High" if x >= threshold else "Low")
+high_threshold = data["PRS"].quantile(0.80)
+low_threshold = data["PRS"].quantile(0.20)
+data["PRSRiskGroup"] = data["PRS"].apply(lambda x: "High" if x >= high_threshold else ("Low" if x <= low_threshold else "Intermediate"))
+
+# make sure APOE is an integer
+data["APOE"] = pd.to_numeric(data["APOE"], errors='coerce').astype('Int64')
 
 ###
 # SAVE PREDICTIONS
