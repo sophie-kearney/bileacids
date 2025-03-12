@@ -23,31 +23,63 @@ trained_model = "seed32_MaskedGRU_0.8267"
 ###
 
 predictions = pd.read_csv(f"processed/{cohort}/{trained_model}_predictions.csv")
-print(predictions)
+# print(predictions)
 
-###
-# FIT DATA
-###
+def kmplot(data, var1, var2=None):
+    kmf = KaplanMeierFitter()
+    plt.figure(figsize=(7, 5))
+    color_set = ["#f09c06", "#0c775e", "#fc0007", "#4dadcc","#149076"]
 
-# kmf = KaplanMeierFitter()
-# plt.figure(figsize=(7, 5))
-#
-# colors = {
-#     "High": "#d8b709",
-#     "Low": "#0c775e"
-# }
-#
-# for group in predictions["RiskGroup"].unique():
-#     mask = predictions["RiskGroup"] == group
-#     kmf.fit(predictions.loc[mask, "ADConversionTime"].fillna(predictions["ADConversionTime"].max()), event_observed=predictions.loc[mask, "AD"])
-#     kmf.plot_survival_function(label=f"{group} BARS", color=colors.get(group, "#000000"))
-#
-# plt.title("Kaplan Meier Curve of MCI to AD Conversion")
-# plt.xlabel("Time (months)")
-# plt.ylim(0, 1)
-# plt.ylabel("Survival Probability")
-# plt.legend(title="Risk Group")
-# plt.show()
+    # only one variable
+    if var2 is None:
+        groups = data[var1].unique()
+        colors = {}
+        for i in range(len(groups)):
+            colors[groups[i]] = color_set[i]
+
+        for group in data[var1].unique():
+            mask = data[var1] == group
+            kmf.fit(data.loc[mask, "ADConversionTime"].fillna(data["ADConversionTime"].max()),
+                    event_observed=data.loc[mask, "AD"])
+            kmf.plot_survival_function(label=f"{group} {var1}", color=colors.get(group, "#000000"))
+
+        title = f"{var1} Kaplan Meier Curve of MCI to AD Conversion"
+
+    # two variables
+    else:
+        group1 = data[var1].unique()
+        group2 = data[var2].unique()
+
+        colors = {}
+        ccounter = 0
+        for i in range(len(group1)):
+            for j in range(len(group2)):
+                colors[(group1[i], group2[j])] = color_set[ccounter]
+                ccounter += 1
+
+        for g1 in group1:
+            for g2 in group2:
+                mask = (data[var1] == g1) & (data[var2] == g2)
+                print(mask)
+                # label = f"{g1} {var1}, {g2} {var2}"
+                # kmf.fit(data.loc[mask, "ADConversionTime"].fillna(data["ADConversionTime"].max()), event_observed=data.loc[mask, "AD"])
+                # kmf.plot_survival_function(label=label, color=colors.get((g1, g2), "#000000"))
+
+    #     title = f"{var1} {var2} Kaplan Meier Curve of MCI to AD Conversion"
+    #
+    # plt.title(title)
+    # plt.xlabel("Time (months)")
+    # plt.ylim(0, 1)
+    # plt.ylabel("Survival Probability")
+    # plt.legend(title="Risk Group")
+    # plt.show()
+
+
+# only BARS
+# kmplot(data=predictions, var1="RiskGroup")
+# only PRS
+# kmplot(data=predictions, var1="PRSRiskGroup")
+kmplot(data=predictions, var1="RiskGroup", var2="RiskGroup")
 
 ###
 # STRATIFY BY PRS
@@ -76,28 +108,28 @@ print(predictions)
 # plt.ylabel("Survival Probability")
 # plt.legend(title="Risk Group")
 # plt.show()
-
-kmf = KaplanMeierFitter()
-plt.figure(figsize=(7, 5))
-colors = {
-    "High": "#d8b709",
-    "Low": "#0c775e",
-    "Intermediate": "#f09c06"
-}
-
-for group in predictions["PRSRiskGroup"].unique():
-    if group == "Intermediate":
-        continue
-    mask = predictions["PRSRiskGroup"] == group
-    kmf.fit(predictions.loc[mask, "ADConversionTime"].fillna(predictions["ADConversionTime"].max()), event_observed=predictions.loc[mask, "AD"])
-    kmf.plot_survival_function(label=f"{group} 20% PRS", color=colors.get(group, "#000000"))
-
-plt.title("Kaplan Meier Curve of MCI to AD Conversion")
-plt.xlabel("Time (months)")
-plt.ylim(0, 1)
-plt.ylabel("Survival Probability")
-plt.legend(title="PRS Risk Group Quintiles")
-plt.show()
+#
+# kmf = KaplanMeierFitter()
+# plt.figure(figsize=(7, 5))
+# colors = {
+#     "High": "#d8b709",
+#     "Low": "#0c775e",
+#     "Intermediate": "#f09c06"
+# }
+#
+# for group in predictions["PRSRiskGroup"].unique():
+#     if group == "Intermediate":
+#         continue
+#     mask = predictions["PRSRiskGroup"] == group
+#     kmf.fit(predictions.loc[mask, "ADConversionTime"].fillna(predictions["ADConversionTime"].max()), event_observed=predictions.loc[mask, "AD"])
+#     kmf.plot_survival_function(label=f"{group} 20% PRS", color=colors.get(group, "#000000"))
+#
+# plt.title("Kaplan Meier Curve of MCI to AD Conversion")
+# plt.xlabel("Time (months)")
+# plt.ylim(0, 1)
+# plt.ylabel("Survival Probability")
+# plt.legend(title="PRS Risk Group Quintiles")
+# plt.show()
 
 ###
 # GET ODDS RATIO TABLE
@@ -117,7 +149,7 @@ plt.show()
 ###
 # STRATIFY BY APOE
 ###
-#
+
 # kmf = KaplanMeierFitter()
 # plt.figure(figsize=(7, 5))
 #
@@ -146,9 +178,9 @@ plt.show()
 # sorted_labels, sorted_handles = zip(*sorted_handles_labels)
 # plt.legend(sorted_handles, sorted_labels, title="APOE")
 # plt.show()
-#
-# # facet by risk group BA
-#
+
+# facet by risk group BA
+
 # plt.figure(figsize=(6, 5))
 # pred_high = predictions[predictions["RiskGroup"] == "High"]
 # print(pred_high)
@@ -171,7 +203,7 @@ plt.show()
 # sorted_labels, sorted_handles = zip(*sorted_handles_labels)
 # plt.legend(sorted_handles, sorted_labels, title="APOE")
 # plt.show()
-#
+
 # plt.figure(figsize=(6, 5))
 # for group in pred_low["APOE"].dropna().unique():
 #     if group == -9:

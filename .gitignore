@@ -1,0 +1,11 @@
+/figures
+/models
+/processed
+/raw
+
+.idea/
+.DS_Store
+.venv/
+__pycache__/
+
+raw/class.csv

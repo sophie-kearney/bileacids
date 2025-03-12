@@ -17,6 +17,7 @@ from sklearn.model_selection import train_test_split
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from models import RNN, GRU, MaskedGRU
+import time, random
 
 ##
 # DEFINE CONSTANTS
@@ -33,7 +34,7 @@ test_trainval_ratio = 0.2
 train_val_ratio = 0.2
 dropout = 0.7
 num_layers = 3
-patience = 65
+patience = 40
 early_stopping = True
 
 # program parameters
@@ -42,6 +43,13 @@ model_choice = "MaskedGRU"   # GRU, simpleRNN, MaskedGRU
 eval = True
 imputed = True
 output_size = 1
+seed = 134
+
+random.seed = seed
+np.random.seed = seed
+torch.manual_seed(seed)
+torch.backends.cudnn.deterministic = True
+torch.use_deterministic_algorithms(True)
 
 ###
 # DATA PROCESSING
@@ -54,10 +62,10 @@ if imputed:
     time_missing = torch.load(f'processed/{cohort}/time_missing.pt')
 
     (X_temp, X_test, y_temp, y_test, mask_temp, mask_test, time_missing_temp, time_missing_test) = (
-        train_test_split(X, y, is_missing, time_missing, test_size=test_trainval_ratio))
+        train_test_split(X, y, is_missing, time_missing, test_size=test_trainval_ratio, random_state=seed))
 
     (X_train, X_val, y_train, y_val, mask_train, mask_val, time_missing_train, time_missing_val) = (
-        train_test_split(X_temp, y_temp, mask_temp, time_missing_temp, test_size=train_val_ratio))
+        train_test_split(X_temp, y_temp, mask_temp, time_missing_temp, test_size=train_val_ratio, random_state=seed))
 
     # create datasets
     train_dataset = TensorDataset(X_train, y_train, mask_train, time_missing_train)
@@ -68,8 +76,8 @@ else:
     X = torch.load(f'processed/{cohort}/not_imputed/X.pt', weights_only=False)
     y = torch.load(f'processed/{cohort}/not_imputed/y.pt')
 
-    (X_temp, X_test, y_temp, y_test) = train_test_split(X, y, test_size=test_trainval_ratio, random_state=32)
-    (X_train, X_val, y_train, y_val) = train_test_split(X_temp, y_temp, test_size=train_val_ratio, random_state=32)
+    (X_temp, X_test, y_temp, y_test) = train_test_split(X, y, test_size=test_trainval_ratio)
+    (X_train, X_val, y_train, y_val) = train_test_split(X_temp, y_temp, test_size=train_val_ratio)
 
     train_dataset = TensorDataset(X_train, y_train)
     val_dataset = TensorDataset(X_val, y_val)
@@ -151,8 +159,8 @@ for epoch in range(num_epochs):
             output = model(X_batch)
             loss = criterion(output.squeeze(1), y_batch)
 
-        l1_norm = sum(p.abs().sum() for p in model.parameters())
-        loss += l1_lambda * l1_norm
+        # l1_norm = sum(p.abs().sum() for p in model.parameters())
+        # loss += l1_lambda * l1_norm
 
         optimizer.zero_grad()
         loss.backward()
@@ -268,18 +276,18 @@ if eval:
     plt.show()
 
     # if roc_auc > get_saved_auc(cohort, model_choice, imputed):
-    file_path = f"models/{cohort}/seed32_{model_choice}_{roc_auc:.4f}"
+    file_path = f"models/{cohort}/{seed}_{model_choice}_{time.strftime('%m%d%H%M')}_{roc_auc:.4f}"
     if not imputed:
         file_path += "_noImp"
     torch.save(model.state_dict(), f"{file_path}")
+    print(f"{seed}_{model_choice}_{time.strftime('%m%d%H%M')}_{roc_auc:.4f}")
+    # hyperparamters = {"max_norm": max_norm, "l1_lambda": l1_lambda, "hidden_size": hidden_size,
+    #                   "batch_size": batch_size, "num_epochs": num_epochs, "lr": lr,
+    #                   "test_trainval_ratio": test_trainval_ratio, "train_val_ratio": train_val_ratio,
+    #                   "dropout": dropout, "num_layers": num_layers, "patience": patience,
+    #                   "early_stopping": early_stopping, "cohort": cohort, "model_choice": model_choice,
+    #                   "imputed": imputed, "accuracy": accuracy, "roc_auc": roc_auc, "aproc": aproc, "r2": r2}
 
-    hyperparamters = {"max_norm": max_norm, "l1_lambda": l1_lambda, "hidden_size": hidden_size,
-                      "batch_size": batch_size, "num_epochs": num_epochs, "lr": lr,
-                      "test_trainval_ratio": test_trainval_ratio, "train_val_ratio": train_val_ratio,
-                      "dropout": dropout, "num_layers": num_layers, "patience": patience,
-                      "early_stopping": early_stopping, "cohort": cohort, "model_choice": model_choice,
-                      "imputed": imputed, "accuracy": accuracy, "roc_auc": roc_auc, "aproc": aproc, "r2": r2}
-
-    with open(f"{file_path}_hyperparameters.txt", "w") as f:
-        for key, value in hyperparamters.items():
-            f.write(f"{key} = {value}\n")
+    # with open(f"{file_path}_hyperparameters.txt", "w") as f:
+    #     for key, value in hyperparamters.items():
+    #         f.write(f"{key} = {value}\n")

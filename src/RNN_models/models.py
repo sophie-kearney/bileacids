@@ -159,6 +159,7 @@ class MaskedGRU(torch.nn.Module):
         batch_size, seq_len, _ = x.size()
         h_t = torch.zeros(batch_size, self.hidden_size, device=x.device)
         # c_t = torch.zeros(batch_size, self.hidden_size, device=x.device)
+        all_hidden_states = []
 
         # Process each time step
         for t in range(seq_len):
@@ -170,6 +171,10 @@ class MaskedGRU(torch.nn.Module):
             for layer in self.gru_cells:
                 h_t = layer(x_t, h_t, delta_t_t, m_t_t)
 
+            all_hidden_states.append(h_t)
+
+        all_hidden_states = torch.stack(all_hidden_states, dim=1)
+
         # Final prediction at the last time step
         logits = self.fc(h_t)
-        return logits, h_t
+        return logits, all_hidden_states

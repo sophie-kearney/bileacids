@@ -31,7 +31,7 @@ longitudinal_cov_columns = ["fast", "BMI", "trig", "chol","hdl" ]
 
 # log 10 scale
 data.iloc[:, begin_met:end_met] = np.log10(data.iloc[:, begin_met:end_met].replace(0, np.nan))
-data.iloc[:, begin_BA_ratio:begin_BA_ratio] = np.log10(data.iloc[:, begin_BA_ratio:begin_BA_ratio].replace(0, np.nan))
+data.iloc[:, begin_BA_ratio:end_BA_ratio] = np.log10(data.iloc[:, begin_BA_ratio:end_BA_ratio].replace(0, np.nan))
 
 # isolate iAD patients
 data["DX_VALS"] = data["DX_VALS"].replace(3, 2)
@@ -65,6 +65,12 @@ else:
 
 # remove infinite values and NAs with 0 in the ratio columns, these are coming from dividing by 0
 # pHCiAD[begin_BA_ratio:end_BA_ratio] = pHCiAD[begin_BA_ratio:end_BA_ratio].replace([np.inf, -np.inf, np.nan], 0)
+
+# get column names
+# met_columns = data.columns[begin_met:end_met].tolist()
+# ba_ratio_columns = data.columns[begin_BA_ratio:end_BA_ratio].tolist()
+# all_columns = met_columns + ba_ratio_columns
+# pd.DataFrame(all_columns, columns=["ColumnNames"]).to_csv("processed/feature_names.csv")
 
 ###
 # IMPUTATION
@@ -160,6 +166,7 @@ if imputed:
             X.append(curr_seq)
             is_missing.append(missingness)
             time_missing.append(time_miss)
+            rids.append(rid)
 
             cov = [rid, patient.iloc[0]["AGE"], patient.iloc[0]["PTGENDER"], patient.iloc[0]["APOE_e2e4"]]
             static_covariates.append(cov) # TODO - there are NA values in the covariates
@@ -177,6 +184,7 @@ if imputed:
     time_missing = torch.tensor(time_missing, dtype=torch.float32)
     static_covariates = torch.tensor(static_covariates, dtype=torch.float32)
     longitudinal_covariates = torch.tensor(longitudinal_covariates, dtype=torch.float32)
+    rids = torch.tensor(rids, dtype=torch.float32)
 
     # no NAs, no Infs
     X = torch.tensor(np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0), dtype=torch.float32)
@@ -197,6 +205,7 @@ if imputed:
     torch.save(time_missing, f'processed/{cohort}/time_missing.pt')
     torch.save(static_covariates, f'processed/{cohort}/static_covariates.pt')
     torch.save(longitudinal_covariates, f'processed/{cohort}/longitudinal_covariates.pt')
+    torch.save(rids, f'processed/{cohort}/rids.pt')
 
 else:
     X = []
