@@ -9,3 +9,6 @@
 __pycache__/
 
 raw/class.csv
+
+src/archive/
+src/RNN_models/archive/
